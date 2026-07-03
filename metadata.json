@@ -1,0 +1,6 @@
+{
+  "name": "MedicalAuditor",
+  "description": "A Forensic Medical Compliance Auditor desktop workspace that evaluates clinical records for negligence, upcoding, and timeline compliance using Gemini.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
