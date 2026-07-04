@@ -32,8 +32,8 @@ interface UseAuditOptions {
   setDoctorSpecialization: (spec: string) => void;
   hospitalName: string;
   setHospitalName: (name: string) => void;
-  department: "Cardiology" | "Orthopedics" | "Radiology" | "Emergency Medicine";
-  setDepartment: (dept: "Cardiology" | "Orthopedics" | "Radiology" | "Emergency Medicine") => void;
+  department: "Cardiology" | "Orthopedics" | "Radiology" | "Emergency Medicine" | "";
+  setDepartment: (dept: "Cardiology" | "Orthopedics" | "Radiology" | "Emergency Medicine" | "") => void;
   setSelectedFile: (file: UploadedFile | null) => void;
 }
 
@@ -525,6 +525,10 @@ export const useAudit = ({
   const clearWorkspace = () => {
     setSelectedFile(null);
     dispatch({ type: "CLEAR_WORKSPACE" });
+    setDoctorName("");
+    setDoctorSpecialization("");
+    setHospitalName("");
+    setDepartment("");
   };
 
   const triggerSupervisorRecheck = async () => {

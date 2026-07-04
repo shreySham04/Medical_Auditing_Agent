@@ -112,6 +112,59 @@ export interface AuditItem {
     reviewText: string;
     publishedToExternal: boolean;
     publishedToHospitalProfile: boolean;
+    forensicUpgrade?: {
+      patient_summary: {
+        name: string;
+        age: string;
+        diagnosis: string;
+      };
+      rag_guidelines: Array<{
+        source: string;
+        rule: string;
+        relevance: string;
+        match_status: "MATCHED" | "NO MATCH FOUND";
+      }>;
+      agent_outputs: {
+        clinical_agent: Array<string>;
+        billing_agent: Array<string>;
+        documentation_agent: Array<string>;
+        timeline_agent: Array<string>;
+      };
+      red_team_analysis: {
+        attacked_findings: Array<{
+          original_finding: string;
+          attack_result: "VALID" | "OVERSTATED" | "INVALID" | "UNCERTAIN";
+          reason: string;
+          missing_context: string;
+          confidence: number;
+        }>;
+        risk_assessment: {
+          hallucination_risk: number;
+          overflagging_risk: number;
+          false_negative_risk: number;
+        };
+      };
+      supervisor_decision: {
+        final_score: number;
+        risk_level: "Low" | "Medium" | "High" | "Critical";
+        verdict: "PASS" | "FLAGGED" | "FAIL";
+        reasoning: string;
+        top_evidence_based_findings: Array<string>;
+      };
+      uncertainty_engine: {
+        overall_uncertainty: number;
+        score_adjustments: {
+          penalty: number;
+          boost: number;
+        };
+        reliability_level: "HIGH" | "MEDIUM" | "LOW";
+      };
+      complaint_recommendation: {
+        should_file_complaint: boolean;
+        reason: string;
+        approval_required: "USER" | "AUTO" | "NONE";
+      };
+    };
   };
 }
 

@@ -1,12 +1,12 @@
 import { useState } from "react";
 
-export type DepartmentType = "Cardiology" | "Orthopedics" | "Radiology" | "Emergency Medicine";
+export type DepartmentType = "Cardiology" | "Orthopedics" | "Radiology" | "Emergency Medicine" | "";
 
 export const usePhysicianTarget = () => {
-  const [doctorName, setDoctorName] = useState<string>("Dr. Sarah Jenkins");
-  const [doctorSpecialization, setDoctorSpecialization] = useState<string>("Cardiologist");
-  const [hospitalName, setHospitalName] = useState<string>("St. Jude General Hospital");
-  const [department, setDepartment] = useState<DepartmentType>("Cardiology");
+  const [doctorName, setDoctorName] = useState<string>("");
+  const [doctorSpecialization, setDoctorSpecialization] = useState<string>("");
+  const [hospitalName, setHospitalName] = useState<string>("");
+  const [department, setDepartment] = useState<DepartmentType>("");
 
   return {
     doctorName,

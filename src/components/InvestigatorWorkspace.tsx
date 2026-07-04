@@ -197,6 +197,7 @@ export const InvestigatorWorkspace: React.FC<InvestigatorWorkspaceProps> = ({
   targetScore,
 }) => {
   const [currentScore, setCurrentScore] = React.useState<number>(0);
+  const [supervisorTab, setSupervisorTab] = React.useState<"overview" | "agents" | "guidelines" | "redteam">("overview");
 
   // Soft animation tick for rating gauge
   React.useEffect(() => {
@@ -376,16 +377,13 @@ export const InvestigatorWorkspace: React.FC<InvestigatorWorkspaceProps> = ({
               </div>
               <div className="col-span-2 space-y-1.5">
                 <label className="text-[10px] font-bold uppercase text-gray-400 block">Acuity Department Division</label>
-                <select
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value as any)}
-                  className="w-full p-2.5 rounded-xl bg-[#090D14] border border-[#21262D] text-white focus:outline-none focus:border-blue-500 cursor-pointer select-none"
-                >
-                  <option value="Cardiology">Cardiology</option>
-                  <option value="Orthopedics">Orthopedics</option>
-                  <option value="Radiology">Radiology</option>
-                  <option value="Emergency Medicine">Emergency Medicine</option>
-                </select>
+                <div className="w-full p-3 rounded-xl bg-[#090D14]/80 border border-[#21262D] text-blue-400 font-semibold text-xs flex items-center justify-between select-none shadow-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                    <span>{department || "Not Assigned"}</span>
+                  </div>
+                  <span className="text-[9px] text-gray-500 uppercase tracking-wider font-normal">Auto-detected from file</span>
+                </div>
               </div>
             </div>
           </div>
@@ -827,6 +825,331 @@ export const InvestigatorWorkspace: React.FC<InvestigatorWorkspaceProps> = ({
                         {supervisorError && (
                           <div className="p-3 bg-red-950/20 border border-red-500/20 text-[10px] text-red-400 rounded-xl leading-relaxed font-mono">
                             {supervisorError}
+                          </div>
+                        )}
+
+                        {activeAudit.supervisorRecheck && (
+                          <div className="mt-6 border border-pink-500/20 bg-[#0F0E13] rounded-2xl p-6 space-y-8">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#21262D] pb-4">
+                              <div className="flex items-center gap-2">
+                                <Sparkles className="w-5 h-5 text-pink-400 animate-pulse" />
+                                <h3 className="font-sans font-black text-sm uppercase tracking-wider text-white">
+                                  Supervisor Verdict & Trust Assessment
+                                </h3>
+                              </div>
+                              <span className="self-start sm:self-auto text-[9px] font-mono font-black uppercase tracking-widest bg-pink-500/15 text-pink-300 border border-pink-500/30 px-2.5 py-1 rounded-full">
+                                Verified Audit Resolution
+                              </span>
+                            </div>
+
+                            {/* SECTION 1: SCORE */}
+                            <div className="space-y-4">
+                              <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-gray-400 uppercase tracking-wider">
+                                <span className="w-1.5 h-1.5 bg-pink-500 rounded-full"></span>
+                                <span>1. Compliance Score & Verdict</span>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="bg-[#161B22]/60 border border-[#30363D] rounded-xl p-4 flex flex-col justify-center items-center text-center relative overflow-hidden">
+                                  <div className="absolute top-0 left-0 w-1 h-full bg-pink-500"></div>
+                                  <span className="text-[10px] font-mono text-gray-400 block uppercase tracking-wider mb-1">
+                                    Final Compliance Score
+                                  </span>
+                                  <div className="flex items-baseline gap-1.5">
+                                    <span className="text-3xl font-black text-pink-400 font-mono">
+                                      {activeAudit.supervisorRecheck.forensicUpgrade?.supervisor_decision?.final_score ?? activeAudit.complianceScore}
+                                    </span>
+                                    <span className="text-sm text-gray-500 font-mono">/100</span>
+                                  </div>
+                                  <span className="text-[10px] text-gray-500 font-mono mt-1">
+                                    Original Score: {activeAudit.complianceScore}/100
+                                  </span>
+                                </div>
+
+                                <div className="bg-[#161B22]/60 border border-[#30363D] rounded-xl p-4 flex flex-col justify-center items-center text-center relative overflow-hidden">
+                                  <div className="absolute top-0 left-0 w-1 h-full bg-pink-500"></div>
+                                  <span className="text-[10px] font-mono text-gray-400 block uppercase tracking-wider mb-2">
+                                    Security & Risk Verdict
+                                  </span>
+                                  <span className={`text-[10px] uppercase font-mono font-black tracking-wider inline-block px-3 py-1 rounded-md ${
+                                    (activeAudit.supervisorRecheck.forensicUpgrade?.supervisor_decision?.verdict ?? "FLAGGED") === "PASS"
+                                      ? "bg-emerald-950/60 text-emerald-400 border border-emerald-500/30"
+                                      : (activeAudit.supervisorRecheck.forensicUpgrade?.supervisor_decision?.verdict ?? "FLAGGED") === "FLAGGED"
+                                      ? "bg-amber-950/60 text-amber-400 border border-amber-500/30"
+                                      : "bg-red-950/60 text-red-400 border-red-500/30"
+                                  }`}>
+                                    {activeAudit.supervisorRecheck.forensicUpgrade?.supervisor_decision?.verdict ?? "FLAGGED"}
+                                  </span>
+                                  <span className="text-[9px] font-mono text-gray-500 mt-2">
+                                    {activeAudit.supervisorRecheck.forensicUpgrade?.supervisor_decision?.risk_level ?? "High"} Risk Level
+                                  </span>
+                                </div>
+
+                                <div className="bg-[#161B22]/60 border border-[#30363D] rounded-xl p-4 flex flex-col justify-center items-center text-center relative overflow-hidden">
+                                  <div className="absolute top-0 left-0 w-1 h-full bg-pink-500"></div>
+                                  <span className="text-[10px] font-mono text-gray-400 block uppercase tracking-wider mb-1">
+                                    Decision Reliability
+                                  </span>
+                                  <span className="text-xl font-black text-emerald-400 font-mono">
+                                    {activeAudit.supervisorRecheck.forensicUpgrade?.uncertainty_engine?.reliability_level ?? "HIGH"}
+                                  </span>
+                                  <span className="text-[10px] text-gray-500 font-mono mt-1">
+                                    Uncertainty Index: {activeAudit.supervisorRecheck.forensicUpgrade?.uncertainty_engine?.overall_uncertainty ?? 15}%
+                                  </span>
+                                </div>
+                              </div>
+
+                              {activeAudit.supervisorRecheck.forensicUpgrade?.patient_summary && (
+                                <div className="bg-[#161B22]/30 border border-[#30363D]/60 rounded-xl p-4">
+                                  <span className="text-[9px] font-mono text-gray-500 uppercase tracking-widest block mb-2.5">
+                                    De-Identified Patient Profile Context
+                                  </span>
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs font-sans">
+                                    <div>
+                                      <span className="text-gray-400 block text-[10px] font-sans mb-0.5">Patient Initials:</span>
+                                      <span className="font-bold text-gray-200 font-mono">{activeAudit.supervisorRecheck.forensicUpgrade.patient_summary.name}</span>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-400 block text-[10px] font-sans mb-0.5">Patient Age:</span>
+                                      <span className="font-bold text-gray-200 font-mono">{activeAudit.supervisorRecheck.forensicUpgrade.patient_summary.age} Years</span>
+                                    </div>
+                                    <div className="col-span-2 sm:col-span-1">
+                                      <span className="text-gray-400 block text-[10px] font-sans mb-0.5">Primary Diagnosis:</span>
+                                      <span className="font-bold text-pink-400 font-sans">{activeAudit.supervisorRecheck.forensicUpgrade.patient_summary.diagnosis}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* SECTION 2: REASON */}
+                            <div className="space-y-4 border-t border-[#21262D] pt-6">
+                              <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-gray-400 uppercase tracking-wider">
+                                <span className="w-1.5 h-1.5 bg-pink-500 rounded-full"></span>
+                                <span>2. Ruling Reasoning & Advisory</span>
+                              </div>
+
+                              {activeAudit.supervisorRecheck.forensicUpgrade?.supervisor_decision?.reasoning && (
+                                <div className="bg-[#161B22]/40 border border-[#30363D] rounded-xl p-4.5 space-y-2">
+                                  <span className="text-[9px] font-mono text-gray-500 uppercase tracking-wider block">
+                                    Supervisor's Narrative Reasoning
+                                  </span>
+                                  <p className="text-xs text-gray-300 leading-relaxed font-sans select-text">
+                                    {activeAudit.supervisorRecheck.forensicUpgrade.supervisor_decision.reasoning}
+                                  </p>
+                                </div>
+                              )}
+
+                              {activeAudit.supervisorRecheck.reviewText && (
+                                <div className="bg-[#1C1217] border border-pink-500/10 rounded-xl p-4.5 space-y-2.5">
+                                  <span className="text-[9px] font-mono text-pink-300 uppercase tracking-widest block">
+                                    Certified Public Patient Safety Advisory Text
+                                  </span>
+                                  <div className="text-xs text-pink-200/90 font-mono whitespace-pre-wrap leading-relaxed bg-black/30 p-3.5 rounded-lg border border-pink-500/5 select-text">
+                                    {activeAudit.supervisorRecheck.reviewText}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* SECTION 3: EVIDENCE */}
+                            <div className="space-y-4 border-t border-[#21262D] pt-6">
+                              <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-gray-400 uppercase tracking-wider">
+                                <span className="w-1.5 h-1.5 bg-pink-500 rounded-full"></span>
+                                <span>3. Verified Clinical Evidence</span>
+                              </div>
+
+                              {activeAudit.supervisorRecheck.forensicUpgrade?.supervisor_decision?.top_evidence_based_findings && (
+                                <div className="space-y-2.5">
+                                  <span className="text-[9px] font-mono text-gray-500 uppercase tracking-wider block">
+                                    Validated Clinical & Financial Discrepancies
+                                  </span>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                    {activeAudit.supervisorRecheck.forensicUpgrade.supervisor_decision.top_evidence_based_findings.map((finding, idx) => (
+                                      <div key={idx} className="flex items-start gap-2.5 bg-[#161B22]/40 border border-[#30363D] rounded-xl p-3.5">
+                                        <CheckCircle2 className="w-4 h-4 text-pink-400 shrink-0 mt-0.5" />
+                                        <span className="text-xs text-gray-300 font-sans leading-relaxed">{finding}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {activeAudit.supervisorRecheck.forensicUpgrade?.rag_guidelines && activeAudit.supervisorRecheck.forensicUpgrade.rag_guidelines.length > 0 && (
+                                <div className="space-y-3 pt-2">
+                                  <span className="text-[9px] font-mono text-gray-500 uppercase tracking-wider block">
+                                    Grounding Guideline Matches (WHO, CMS, ACC/AHA)
+                                  </span>
+                                  <div className="space-y-2.5">
+                                    {activeAudit.supervisorRecheck.forensicUpgrade.rag_guidelines.map((gl, idx) => (
+                                      <div key={idx} className="bg-[#161B22]/20 border border-[#30363D]/40 rounded-xl p-4 flex flex-col md:flex-row md:items-start justify-between gap-3">
+                                        <div className="space-y-1.5 max-w-3xl">
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-pink-400 px-1.5 py-0.5 bg-pink-500/10 rounded">
+                                              {gl.source}
+                                            </span>
+                                            <span className="text-[11px] font-sans font-bold text-gray-200">{gl.rule}</span>
+                                          </div>
+                                          <p className="text-[11px] text-gray-400 font-sans leading-relaxed">
+                                            {gl.relevance}
+                                          </p>
+                                        </div>
+                                        <span className={`text-[8.5px] font-mono uppercase font-black tracking-widest px-2 py-0.5 rounded-full border self-start md:self-auto ${
+                                          gl.match_status === "MATCHED"
+                                            ? "bg-emerald-950/50 text-emerald-400 border-emerald-500/20"
+                                            : "bg-[#21262D]/60 text-gray-400 border-gray-700/40"
+                                        }`}>
+                                          {gl.match_status}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* SECTION 4: RISK */}
+                            <div className="space-y-4 border-t border-[#21262D] pt-6">
+                              <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-gray-400 uppercase tracking-wider">
+                                <span className="w-1.5 h-1.5 bg-pink-500 rounded-full"></span>
+                                <span>4. Adversarial Trust & Verification Check</span>
+                              </div>
+
+                              {activeAudit.supervisorRecheck.forensicUpgrade?.red_team_analysis?.attacked_findings && (
+                                <div className="space-y-3">
+                                  <span className="text-[9px] font-mono text-gray-500 uppercase tracking-wider block">
+                                    Adversarial Critique & Verification of Finding Validity
+                                  </span>
+                                  <div className="space-y-2.5">
+                                    {activeAudit.supervisorRecheck.forensicUpgrade.red_team_analysis.attacked_findings.map((attack, idx) => {
+                                      let statusColor = "text-emerald-400 bg-emerald-950/40 border-emerald-500/20";
+                                      if (attack.attack_result === "OVERSTATED") {
+                                        statusColor = "text-amber-400 bg-amber-950/40 border-amber-500/20";
+                                      } else if (attack.attack_result === "INVALID") {
+                                        statusColor = "text-red-400 bg-red-950/40 border-red-500/20";
+                                      } else if (attack.attack_result === "UNCERTAIN") {
+                                        statusColor = "text-gray-400 bg-gray-900/40 border-gray-800/40";
+                                      }
+
+                                      return (
+                                        <div key={idx} className="bg-[#161B22]/40 border border-[#30363D] rounded-xl p-4 space-y-2.5">
+                                          <div className="flex items-center justify-between gap-2 border-b border-[#21262D] pb-2">
+                                            <span className="text-xs font-bold text-gray-200">{attack.original_finding}</span>
+                                            <span className={`text-[8.5px] font-mono uppercase font-black px-2 py-0.5 rounded border tracking-wider ${statusColor}`}>
+                                              {attack.attack_result}
+                                            </span>
+                                          </div>
+                                          <p className="text-[11px] text-gray-300 font-sans leading-relaxed">
+                                            <span className="text-pink-400 font-mono text-[9px] uppercase font-bold block mb-0.5">Verification Evaluation:</span>
+                                            {attack.reason}
+                                          </p>
+                                          {attack.missing_context && attack.missing_context !== "None" && (
+                                            <p className="text-[10.5px] text-gray-400 italic font-sans pt-2 border-t border-[#21262D]/60">
+                                              <span className="font-bold">Missing Clinical Context analyzed:</span> {attack.missing_context}
+                                            </p>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className="bg-[#161B22]/30 border border-[#30363D] rounded-xl p-4.5 space-y-4">
+                                <span className="text-[9px] font-mono text-gray-500 uppercase tracking-wider block">
+                                  Adversarial Safety Meter Parameters
+                                </span>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 font-sans">
+                                  <div className="p-3 bg-[#0D1117] rounded-lg border border-[#21262D]">
+                                    <span className="text-gray-500 text-[9px] block font-mono uppercase">Hallucination Risk</span>
+                                    <div className="flex items-center justify-between gap-2 mt-1.5">
+                                      <div className="w-full bg-gray-800 h-1.5 rounded-full overflow-hidden">
+                                        <div
+                                          className="bg-red-500 h-full rounded-full"
+                                          style={{ width: `${activeAudit.supervisorRecheck.forensicUpgrade?.red_team_analysis?.risk_assessment?.hallucination_risk ?? 5}%` }}
+                                        ></div>
+                                      </div>
+                                      <span className="text-xs font-bold text-red-400 font-mono shrink-0">
+                                        {activeAudit.supervisorRecheck.forensicUpgrade?.red_team_analysis?.risk_assessment?.hallucination_risk ?? 5}%
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="p-3 bg-[#0D1117] rounded-lg border border-[#21262D]">
+                                    <span className="text-gray-500 text-[9px] block font-mono uppercase">Overflagging Risk</span>
+                                    <div className="flex items-center justify-between gap-2 mt-1.5">
+                                      <div className="w-full bg-gray-800 h-1.5 rounded-full overflow-hidden">
+                                        <div
+                                          className="bg-amber-500 h-full rounded-full"
+                                          style={{ width: `${activeAudit.supervisorRecheck.forensicUpgrade?.red_team_analysis?.risk_assessment?.overflagging_risk ?? 15}%` }}
+                                        ></div>
+                                      </div>
+                                      <span className="text-xs font-bold text-amber-400 font-mono shrink-0">
+                                        {activeAudit.supervisorRecheck.forensicUpgrade?.red_team_analysis?.risk_assessment?.overflagging_risk ?? 15}%
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="p-3 bg-[#0D1117] rounded-lg border border-[#21262D]">
+                                    <span className="text-gray-500 text-[9px] block font-mono uppercase">False Negative Risk</span>
+                                    <div className="flex items-center justify-between gap-2 mt-1.5">
+                                      <div className="w-full bg-gray-800 h-1.5 rounded-full overflow-hidden">
+                                        <div
+                                          className="bg-sky-500 h-full rounded-full"
+                                          style={{ width: `${activeAudit.supervisorRecheck.forensicUpgrade?.red_team_analysis?.risk_assessment?.false_negative_risk ?? 5}%` }}
+                                        ></div>
+                                      </div>
+                                      <span className="text-xs font-bold text-sky-400 font-mono shrink-0">
+                                        {activeAudit.supervisorRecheck.forensicUpgrade?.red_team_analysis?.risk_assessment?.false_negative_risk ?? 5}%
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {activeAudit.supervisorRecheck.forensicUpgrade?.uncertainty_engine?.score_adjustments && (
+                                  <div className="pt-3 border-t border-[#21262D] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs leading-relaxed font-sans">
+                                    <div className="text-gray-400">
+                                      Adversarial Penalty applied:{" "}
+                                      <span className="text-red-400 font-bold font-mono">
+                                        -{activeAudit.supervisorRecheck.forensicUpgrade.uncertainty_engine.score_adjustments.penalty} Pts
+                                      </span>
+                                    </div>
+                                    <div className="text-gray-400">
+                                      Adversarial Score restoration boost:{" "}
+                                      <span className="text-emerald-400 font-bold font-mono">
+                                        +{activeAudit.supervisorRecheck.forensicUpgrade.uncertainty_engine.score_adjustments.boost} Pts
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+
+                              {activeAudit.supervisorRecheck.forensicUpgrade?.complaint_recommendation && (
+                                <div className="bg-pink-950/10 border border-pink-500/10 rounded-xl p-4.5 space-y-3">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-[10px] uppercase font-bold text-pink-300 tracking-wider">
+                                      Forensic Complaint Recommendation
+                                    </span>
+                                    <span className={`text-[8.5px] font-mono font-black uppercase tracking-wider px-2.5 py-0.5 rounded border ${
+                                      activeAudit.supervisorRecheck.forensicUpgrade.complaint_recommendation.should_file_complaint
+                                        ? "bg-red-950/40 text-red-400 border-red-500/20"
+                                        : "bg-emerald-950/40 text-emerald-400 border-emerald-500/20"
+                                    }`}>
+                                      {activeAudit.supervisorRecheck.forensicUpgrade.complaint_recommendation.should_file_complaint
+                                        ? "FILE COMPLAINT RECOMMENDED"
+                                        : "NO COMPLAINT REQUIRED"}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-gray-300 font-sans leading-relaxed">
+                                    <span className="font-bold text-gray-400">Action Plan:</span> {activeAudit.supervisorRecheck.forensicUpgrade.complaint_recommendation.reason}
+                                  </p>
+                                  <div className="text-[9px] text-gray-500 font-mono">
+                                    Approval Process: <span className="text-pink-400 font-bold uppercase">{activeAudit.supervisorRecheck.forensicUpgrade.complaint_recommendation.approval_required}</span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>

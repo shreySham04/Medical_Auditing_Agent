@@ -10,7 +10,8 @@ interface UploadedFile {
 interface FileUploadOptions {
   setDoctorName: (name: string) => void;
   setDoctorSpecialization: (spec: string) => void;
-  setDepartment: (dept: "Cardiology" | "Orthopedics" | "Radiology" | "Emergency Medicine") => void;
+  setHospitalName: (name: string) => void;
+  setDepartment: (dept: "Cardiology" | "Orthopedics" | "Radiology" | "Emergency Medicine" | "") => void;
   setTargetScore: (score: number) => void;
   setVerdictText: (txt: string) => void;
   setVerdictState: (state: "none" | "Pass" | "Flagged" | "Failed") => void;
@@ -23,6 +24,7 @@ interface FileUploadOptions {
 export const useFileUpload = ({
   setDoctorName,
   setDoctorSpecialization,
+  setHospitalName,
   setDepartment,
   setTargetScore,
   setVerdictText,
@@ -59,6 +61,12 @@ export const useFileUpload = ({
         type: file.type,
         data: b64Data,
       });
+
+      // Reset all physician target setting fields to empty on file change
+      setDoctorName("");
+      setDoctorSpecialization("");
+      setHospitalName("");
+      setDepartment("");
 
       // Quick dynamic updates based on file-name descriptors
       const lowerFile = file.name.toLowerCase();

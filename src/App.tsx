@@ -128,6 +128,7 @@ export default function App() {
   const fileUploadHook = useFileUpload({
     setDoctorName,
     setDoctorSpecialization,
+    setHospitalName,
     setDepartment,
     setTargetScore,
     setVerdictText,
