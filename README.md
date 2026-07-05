@@ -1,102 +1,151 @@
-<div align="center">
-<h1>MedicalAuditor</h1>
-<h3>Multi-Agent AI System for Forensic Medical Compliance Auditing</h3>
-</div>
+# 🏥 MedicalAuditor  
+### Multi-Agent AI System for Forensic Medical Compliance Auditing
 
 ---
 
-##  Problem Statement
+## 🚨 Problem Statement
 
-Medical records auditing is slow, inconsistent, and prone to human error.  
-Hospitals often face challenges in detecting:
+Medical record auditing in hospitals is:
 
-- Clinical deviations  
-- Billing inconsistencies  
-- Documentation gaps  
-- Timeline mismatches  
+- Time-consuming  
+- Error-prone  
+- Difficult to scale  
+- Vulnerable to billing fraud and documentation inconsistencies  
 
----
+Critical issues include:
 
-## Solution
-
-MedicalAuditor is a **multi-agent AI system** that performs automated forensic medical auditing using specialized AI agents and a supervisor verification layer.
-
----
-
-##  System Architecture
-
-Medical Document  
-→ Document Agent  
-→ Clinical Agent + Billing Agent (parallel)  
-→ Documentation Agent + Timeline Agent  
-→ Supervisor Agent  
-→ Final Audit Report  
+- Clinical guideline deviations  
+- Billing upcoding and financial inconsistencies  
+- Missing or incomplete documentation  
+- Timeline mismatches in patient records  
 
 ---
 
-##  Multi-Agent System
+## 💡 Solution Overview
 
-### 1. Document Agent
-Extracts and structures medical text from raw input.
+MedicalAuditor is a **multi-agent AI system** that performs automated forensic medical auditing using specialized AI agents.
 
-### 2. Clinical Agent
-Checks diagnosis accuracy and treatment consistency.
-
-### 3. Billing Agent
-Detects upcoding and billing inconsistencies.
-
-### 4. Documentation Agent
-Validates completeness of medical records.
-
-### 5. Timeline Agent
-Ensures chronological consistency of events.
-
-### 6. Supervisor Agent
-Aggregates all outputs and produces final verified compliance score.
-
-## 🏗️ Architecture Diagram
-
-Medical Input
-    ↓
-Document Agent
-    ↓
-┌──────────────────────┐
-│ Clinical Agent       │
-│ Billing Agent        │
-└──────────────────────┘
-    ↓
-┌──────────────────────┐
-│ Documentation Agent  │
-│ Timeline Agent       │
-└──────────────────────┘
-    ↓
-Supervisor Agent
-    ↓
-Final Compliance Score
----
-
-## MCP Server
-
-The MCP server manages orchestration between agents and enables structured tool-based communication for audit workflows.
+Instead of a single AI model, the system uses multiple expert agents that collaborate and are verified by a supervisor layer.
 
 ---
 
-##  Tech Stack
+## 🧠 Key Features
 
-- TypeScript
-- Node.js
-- React (Vite)
-- MCP Architecture
-- Gemini AI Integration
+- Multi-Agent AI Architecture  
+- Parallel + Sequential Agent Execution  
+- Supervisor-based verification system  
+- Clinical compliance checking  
+- Billing fraud detection  
+- Documentation validation  
+- Timeline consistency analysis  
+- Explainable AI audit reports  
+- MCP-based orchestration layer  
 
 ---
-Summary
 
-MedicalAuditor transforms medical auditing into a transparent, explainable, and AI-driven multi-agent system designed for real-world healthcare compliance evaluation.
 
-##  How to Run
+---
 
-```bash
+## 🤖 Multi-Agent System Design
+
+### 📄 Document Agent
+- Extracts and structures medical data from raw input  
+- Cleans OCR / PDF text  
+- Identifies patient + report metadata  
+
+---
+
+### 🩺 Clinical Agent
+- Validates diagnosis correctness  
+- Checks treatment appropriateness  
+- Compares with clinical guidelines (WHO / ACC-AHA / NICE)  
+
+---
+
+### 💰 Billing Agent
+- Detects upcoding patterns  
+- Identifies billing inconsistencies  
+- Flags suspicious financial entries  
+
+---
+
+### 📋 Documentation Agent
+- Checks completeness of medical records  
+- Validates signatures and required fields  
+- Detects missing clinical documentation  
+
+---
+
+### ⏱ Timeline Agent
+- Reconstructs chronological sequence  
+- Detects inconsistent or impossible events  
+- Validates temporal accuracy of treatment flow  
+
+---
+
+### 🧠 Supervisor Agent
+- Aggregates all agent outputs  
+- Resolves conflicts between agents  
+- Performs final risk evaluation  
+- Generates final compliance score  
+- Produces verdict (PASS / FLAGGED / FAIL)  
+
+---
+
+## 🔌 MCP Server (Orchestration Layer)
+
+The MCP (Model Context Protocol) server enables structured communication between agents.
+
+It handles:
+
+- Agent-to-agent communication  
+- Tool orchestration  
+- Workflow control  
+- Structured response formatting  
+- External service integration  
+
+---
+
+## ⚙️ Tech Stack
+
+- TypeScript  
+- Node.js  
+- React (Vite)  
+- MCP Architecture  
+- Gemini AI API  
+
+---
+
+## 🚀 How to Run
+### 1. Install dependencies
 npm install
+
+2. Start frontend
 npm run dev
 
+4. Start backend
+node server.ts
+
+5. Start MCP server
+node mcp-server.ts
+
+
+
+#OUTPUT
+{
+  "final_score": 82,
+  "verdict": "FLAGGED",
+  "risk_level": "MEDIUM",
+  "clinical_findings": [
+    "Minor inconsistency in treatment guideline adherence"
+  ],
+  "billing_findings": [
+    "Possible upcoding detected in billing records"
+  ],
+  "timeline_status": "Consistent",
+  "confidence": 0.87
+}
+
+Summary
+
+MedicalAuditor is a multi-agent AI system for forensic medical compliance auditing. It uses specialized agents (Clinical, Billing, Documentation, Timeline) coordinated through a Supervisor Agent and MCP-based orchestration to produce explainable, structured, and reliable audit decisions.
