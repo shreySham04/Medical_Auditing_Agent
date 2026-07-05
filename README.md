@@ -71,9 +71,13 @@ The MCP server manages orchestration between agents and enables structured tool-
 - Gemini AI Integration
 
 ---
+Summary
+
+MedicalAuditor transforms medical auditing into a transparent, explainable, and AI-driven multi-agent system designed for real-world healthcare compliance evaluation.
 
 ##  How to Run
 
 ```bash
 npm install
 npm run dev
+
