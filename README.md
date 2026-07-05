@@ -54,6 +54,25 @@ Ensures chronological consistency of events.
 ### 6. Supervisor Agent
 Aggregates all outputs and produces final verified compliance score.
 
+## 🏗️ Architecture Diagram
+
+Medical Input
+    ↓
+Document Agent
+    ↓
+┌──────────────────────┐
+│ Clinical Agent       │
+│ Billing Agent        │
+└──────────────────────┘
+    ↓
+┌──────────────────────┐
+│ Documentation Agent  │
+│ Timeline Agent       │
+└──────────────────────┘
+    ↓
+Supervisor Agent
+    ↓
+Final Compliance Score
 ---
 
 ## MCP Server
