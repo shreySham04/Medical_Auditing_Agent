@@ -503,43 +503,43 @@ export const InvestigatorWorkspace: React.FC<InvestigatorWorkspaceProps> = ({
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs font-mono">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold uppercase text-gray-400 block">Attending Doctor Name</label>
-                <div className="w-full p-3 rounded-xl bg-[#090D14]/80 border border-[#21262D] text-blue-400 font-semibold text-xs flex items-center justify-between select-none shadow-sm">
-                  <div className="flex items-center gap-2 overflow-hidden">
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${doctorName ? "bg-emerald-500 animate-pulse" : "bg-gray-600"}`}></span>
-                    <span className={`truncate ${doctorName ? "text-gray-200" : "text-gray-500"}`}>{doctorName || "Pending Ingestion"}</span>
-                  </div>
-                  <span className="text-[8px] text-gray-500 uppercase tracking-wider font-normal shrink-0">Auto-detected from file</span>
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold uppercase text-gray-400 block">Attending Doctor Name</label>
+                  <span className="text-[8px] text-gray-500 uppercase tracking-wider bg-[#090D14] px-1.5 py-0.5 rounded border border-[#21262D]">Auto-detected</span>
+                </div>
+                <div className="w-full p-3 rounded-xl bg-[#090D14]/80 border border-[#21262D] text-blue-400 font-semibold text-xs flex items-center gap-2 select-none shadow-sm">
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${doctorName ? "bg-emerald-500 animate-pulse" : "bg-gray-600"}`}></span>
+                  <span className={`${doctorName ? "text-gray-200 font-medium" : "text-gray-500"} break-words`}>{doctorName || "Pending Ingestion"}</span>
                 </div>
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold uppercase text-gray-400 block">Physician Specialization</label>
-                <div className="w-full p-3 rounded-xl bg-[#090D14]/80 border border-[#21262D] text-blue-400 font-semibold text-xs flex items-center justify-between select-none shadow-sm">
-                  <div className="flex items-center gap-2 overflow-hidden">
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${doctorSpecialization ? "bg-emerald-500 animate-pulse" : "bg-gray-600"}`}></span>
-                    <span className={`truncate ${doctorSpecialization ? "text-gray-200" : "text-gray-500"}`}>{doctorSpecialization || "Pending Ingestion"}</span>
-                  </div>
-                  <span className="text-[8px] text-gray-500 uppercase tracking-wider font-normal shrink-0">Auto-detected from file</span>
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold uppercase text-gray-400 block">Physician Specialization</label>
+                  <span className="text-[8px] text-gray-500 uppercase tracking-wider bg-[#090D14] px-1.5 py-0.5 rounded border border-[#21262D]">Auto-detected</span>
+                </div>
+                <div className="w-full p-3 rounded-xl bg-[#090D14]/80 border border-[#21262D] text-blue-400 font-semibold text-xs flex items-center gap-2 select-none shadow-sm">
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${doctorSpecialization ? "bg-emerald-500 animate-pulse" : "bg-gray-600"}`}></span>
+                  <span className={`${doctorSpecialization ? "text-gray-200 font-medium" : "text-gray-500"} break-words`}>{doctorSpecialization || "Pending Ingestion"}</span>
                 </div>
               </div>
               <div className="col-span-2 space-y-1.5">
-                <label className="text-[10px] font-bold uppercase text-gray-400 block">Hospital Facility Name</label>
-                <div className="w-full p-3 rounded-xl bg-[#090D14]/80 border border-[#21262D] text-blue-400 font-semibold text-xs flex items-center justify-between select-none shadow-sm">
-                  <div className="flex items-center gap-2 overflow-hidden">
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${hospitalName ? "bg-emerald-500 animate-pulse" : "bg-gray-600"}`}></span>
-                    <span className={`truncate ${hospitalName ? "text-gray-200" : "text-gray-500"}`}>{hospitalName || "Pending Ingestion"}</span>
-                  </div>
-                  <span className="text-[8px] text-gray-500 uppercase tracking-wider font-normal shrink-0">Auto-detected from file</span>
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold uppercase text-gray-400 block">Hospital Facility Name</label>
+                  <span className="text-[8px] text-gray-500 uppercase tracking-wider bg-[#090D14] px-1.5 py-0.5 rounded border border-[#21262D]">Auto-detected</span>
+                </div>
+                <div className="w-full p-3 rounded-xl bg-[#090D14]/80 border border-[#21262D] text-blue-400 font-semibold text-xs flex items-center gap-2 select-none shadow-sm">
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${hospitalName ? "bg-emerald-500 animate-pulse" : "bg-gray-600"}`}></span>
+                  <span className={`${hospitalName ? "text-gray-200 font-medium" : "text-gray-500"} break-words`}>{hospitalName || "Pending Ingestion"}</span>
                 </div>
               </div>
               <div className="col-span-2 space-y-1.5">
-                <label className="text-[10px] font-bold uppercase text-gray-400 block">Acuity Department Division</label>
-                <div className="w-full p-3 rounded-xl bg-[#090D14]/80 border border-[#21262D] text-blue-400 font-semibold text-xs flex items-center justify-between select-none shadow-sm">
-                  <div className="flex items-center gap-2 overflow-hidden">
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${department ? "bg-emerald-500 animate-pulse" : "bg-gray-600"}`}></span>
-                    <span className={`truncate ${department ? "text-gray-200" : "text-gray-500"}`}>{department || "Pending Ingestion"}</span>
-                  </div>
-                  <span className="text-[8px] text-gray-500 uppercase tracking-wider font-normal shrink-0">Auto-detected from file</span>
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold uppercase text-gray-400 block">Acuity Department Division</label>
+                  <span className="text-[8px] text-gray-500 uppercase tracking-wider bg-[#090D14] px-1.5 py-0.5 rounded border border-[#21262D]">Auto-detected</span>
+                </div>
+                <div className="w-full p-3 rounded-xl bg-[#090D14]/80 border border-[#21262D] text-blue-400 font-semibold text-xs flex items-center gap-2 select-none shadow-sm">
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${department ? "bg-emerald-500 animate-pulse" : "bg-gray-600"}`}></span>
+                  <span className={`${department ? "text-gray-200" : "text-gray-500"} break-words`}>{department || "Pending Ingestion"}</span>
                 </div>
               </div>
             </div>
