@@ -38,12 +38,6 @@ export const RegistryTab: React.FC<RegistryTabProps> = ({
   const registeredComplaints = audits.filter((item) => item.complaint?.status === "REGISTERED");
   const lowRiskAuditCount = audits.filter((item) => item.riskClassification === "Low").length;
 
-  const getDeptAverage = (dept: string) => {
-    const deptAudits = audits.filter((a) => a.department === dept);
-    if (deptAudits.length === 0) return 92; // default high-quality fallback rating
-    return Math.round(deptAudits.reduce((sum, item) => sum + item.complianceScore, 0) / deptAudits.length);
-  };
-
   return (
     <main className="flex-1 overflow-y-auto p-5 bg-[#090D14] space-y-5 select-text">
       {/* System overview grid stats */}
@@ -521,70 +515,6 @@ export const RegistryTab: React.FC<RegistryTabProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* Column Left: Department-wise Ratings & AI Predictors */}
         <div className="lg:col-span-12 space-y-4 font-mono">
-          {/* Department level score cards */}
-          <div className="bg-[#121620] border border-[#21262D] rounded-2xl p-5 space-y-4 shadow hover:border-blue-500/10 transition-colors duration-300">
-            <div className="space-y-1 select-none">
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 font-mono">
-                <Building className="w-4 h-4 text-emerald-400" /> Active Departmental Rating Indices
-              </h3>
-              <p className="text-[10px] text-[#8B949E]">
-                Aggregated averages mapped directly from specialized departments.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="bg-[#090D14] p-3 rounded-xl border border-[#21262D] text-center space-y-1.5 shadow hover:border-blue-500/20 transition-all duration-300">
-                <span className="text-[8px] uppercase font-bold text-gray-500 block">Cardiology</span>
-                <span
-                  className={`text-sm font-bold ${getDeptAverage("Cardiology") >= 60 ? "text-emerald-400" : "text-red-400"}`}
-                >
-                  {getDeptAverage("Cardiology")}%
-                </span>
-                <div className="w-full bg-gray-800 h-1 rounded-full overflow-hidden mt-1.5">
-                  <div className="bg-emerald-500 h-full" style={{ width: `${getDeptAverage("Cardiology")}%` }} />
-                </div>
-              </div>
-
-              <div className="bg-[#090D14] p-3 rounded-xl border border-[#21262D] text-center space-y-1.5 shadow hover:border-blue-500/20 transition-all duration-300">
-                <span className="text-[8px] uppercase font-bold text-gray-500 block">Orthopedics</span>
-                <span
-                  className={`text-sm font-bold ${getDeptAverage("Orthopedics") >= 60 ? "text-emerald-400" : "text-red-400"}`}
-                >
-                  {getDeptAverage("Orthopedics")}%
-                </span>
-                <div className="w-full bg-gray-800 h-1 rounded-full overflow-hidden mt-1.5">
-                  <div className="bg-emerald-500 h-full" style={{ width: `${getDeptAverage("Orthopedics")}%` }} />
-                </div>
-              </div>
-
-              <div className="bg-[#090D14] p-3 rounded-xl border border-[#21262D] text-center space-y-1.5 shadow hover:border-blue-500/20 transition-all duration-300">
-                <span className="text-[8px] uppercase font-bold text-gray-500 block">Radiology</span>
-                <span
-                  className={`text-sm font-bold ${getDeptAverage("Radiology") >= 60 ? "text-emerald-400" : "text-red-400"}`}
-                >
-                  {getDeptAverage("Radiology")}%
-                </span>
-                <div className="w-full bg-gray-800 h-1 rounded-full overflow-hidden mt-1.5">
-                  <div className="bg-emerald-500 h-full" style={{ width: `${getDeptAverage("Radiology")}%` }} />
-                </div>
-              </div>
-
-              <div className="bg-[#090D14] p-3 rounded-xl border border-[#21262D] text-center space-y-1.5 shadow hover:border-blue-500/20 transition-all duration-300">
-                <span className="text-[8px] uppercase font-bold text-gray-500 block">Emergency Med</span>
-                <span
-                  className={`text-sm font-bold ${
-                    getDeptAverage("Emergency Medicine") >= 60 ? "text-emerald-400" : "text-red-400"
-                  }`}
-                >
-                  {getDeptAverage("Emergency Medicine")}%
-                </span>
-                <div className="w-full bg-gray-800 h-1 rounded-full overflow-hidden mt-1.5">
-                  <div className="bg-emerald-500 h-full" style={{ width: `${getDeptAverage("Emergency Medicine")}%` }} />
-                </div>
-              </div>
-            </div>
-          </div>
-
           {/* PROVIDER RELIABILITY INDEX MODEL DETAILS */}
           <div className="bg-[#121620] border border-[#21262D] rounded-2xl p-5 space-y-3.5 shadow hover:border-blue-500/10 transition-colors duration-300">
             <div className="space-y-1 select-none">

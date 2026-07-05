@@ -13,6 +13,12 @@ import {
   Award,
   BookOpen,
   Sparkles,
+  Cpu,
+  Stethoscope,
+  Receipt,
+  ClipboardCheck,
+  Clock,
+  ShieldCheck,
 } from "lucide-react";
 import { AuditItem } from "../types";
 import { MarkdownViewer } from "./MarkdownViewer";
@@ -199,6 +205,154 @@ export const InvestigatorWorkspace: React.FC<InvestigatorWorkspaceProps> = ({
   const [currentScore, setCurrentScore] = React.useState<number>(0);
   const [supervisorTab, setSupervisorTab] = React.useState<"overview" | "agents" | "guidelines" | "redteam">("overview");
 
+  const pipelineSteps = [
+    // 1. MEDICAL PDF INGESTION: Entrypoint of the forensic pipeline. Ingests raw EHR files, scans clinical attachments, and triggers the downstream pipeline.
+    {
+      id: "pdf",
+      name: "Medical PDF",
+      desc: "Ingests clinical charts, patient records, and EHR artifacts.",
+      icon: FileText,
+      getStatus: () => {
+        if (auditStage === "idle" && !selectedFile) return "pending";
+        if (auditStage === "idle" && selectedFile) return "completed";
+        if (auditStage === "failed" && !activeAudit) return "failed";
+        return "completed";
+      },
+      statusText: () => {
+        if (auditStage === "idle" && !selectedFile) return "Awaiting File";
+        if (auditStage === "idle" && selectedFile) return "File Staged";
+        return "Ingested";
+      }
+    },
+    // 2. DOCUMENT AGENT: Responsible for parsing the structural layout, running OCR, extracting table lines, and sanitizing textual inputs for other LLM-based agents.
+    {
+      id: "document",
+      name: "Document Agent",
+      desc: "Performs layout analysis, text extraction, and OCR pre-processing.",
+      icon: Cpu,
+      getStatus: () => {
+        if (auditStage === "idle") return "pending";
+        if (auditStage === "ingesting") return "active";
+        if (auditStage === "failed" && !activeAudit) return "failed";
+        return "completed";
+      },
+      statusText: () => {
+        if (auditStage === "idle") return "Pending";
+        if (auditStage === "ingesting") return "Parsing Layout...";
+        return "Parsed & Structured";
+      }
+    },
+    // 3. CLINICAL AGENT: Focuses on domain-specific medical evaluation. Auto-detects diagnosis patterns, patient vitals, active medications, and flags inconsistencies against standards of care.
+    {
+      id: "clinical",
+      name: "Clinical Agent",
+      desc: "Cross-references symptoms, vitals, and standard-of-care guidelines.",
+      icon: Stethoscope,
+      getStatus: () => {
+        if (auditStage === "idle" || auditStage === "ingesting") return "pending";
+        if (auditStage === "primary_agent") return "active";
+        if (auditStage === "failed" && !activeAudit) return "failed";
+        return "completed";
+      },
+      statusText: () => {
+        if (auditStage === "idle" || auditStage === "ingesting") return "Pending";
+        if (auditStage === "primary_agent") return "Evaluating care...";
+        return "Care Verified";
+      }
+    },
+    // 4. BILLING AGENT: Validates billing documentation, coding consistency (where available), and detects potential unbundling or upcoding indicators.
+    {
+      id: "billing",
+      name: "Billing Agent",
+      desc: "Validates billing documentation, coding consistency (where available), and detects potential unbundling or upcoding indicators.",
+      icon: Receipt,
+      getStatus: () => {
+        if (auditStage === "idle" || auditStage === "ingesting") return "pending";
+        if (auditStage === "primary_agent") return "active";
+        if (auditStage === "failed" && !activeAudit) return "failed";
+        return "completed";
+      },
+      statusText: () => {
+        if (auditStage === "idle" || auditStage === "ingesting") return "Pending";
+        if (auditStage === "primary_agent") return "Auditing billing...";
+        return "Billing Audited";
+      }
+    },
+    // 5. DOCUMENTATION AGENT: Reviews formatting completeness, digital signatures, legal disclaimers, physician attestations, and compliance with institutional standards.
+    {
+      id: "documentation",
+      name: "Documentation Agent",
+      desc: "Reviews attestation, digital signatures, and clinical note completeness.",
+      icon: ClipboardCheck,
+      getStatus: () => {
+        if (auditStage === "idle" || auditStage === "ingesting" || auditStage === "primary_agent") return "pending";
+        if (auditStage === "verification_agent") return "active";
+        if (auditStage === "failed" && !activeAudit) return "failed";
+        return "completed";
+      },
+      statusText: () => {
+        if (auditStage === "idle" || auditStage === "ingesting" || auditStage === "primary_agent") return "Pending";
+        if (auditStage === "verification_agent") return "Reviewing signatures...";
+        return "Attestation Verified";
+      }
+    },
+    // 6. TIMELINE AGENT: Reconstructs the chronological sequence of documented events and detects inconsistencies or implausible ordering.
+    {
+      id: "timeline",
+      name: "Timeline Agent",
+      desc: "Reconstructs the chronological sequence of documented events and detects inconsistencies or implausible ordering.",
+      icon: Clock,
+      getStatus: () => {
+        if (auditStage === "idle" || auditStage === "ingesting" || auditStage === "primary_agent") return "pending";
+        if (auditStage === "verification_agent") return "active";
+        if (auditStage === "failed" && !activeAudit) return "failed";
+        return "completed";
+      },
+      statusText: () => {
+        if (auditStage === "idle" || auditStage === "ingesting" || auditStage === "primary_agent") return "Pending";
+        if (auditStage === "verification_agent") return "Verifying timeline...";
+        return "Timeline Verified";
+      }
+    },
+    // 7. SUPERVISOR AGENT: Runs a self-corrective red-team loop over the compiled metrics. Critiques primary evaluations, mitigates hallucinated findings, and enforces final safety guidelines.
+    {
+      id: "supervisor",
+      name: "Supervisor",
+      desc: "Executes adversarial critique, red-teaming, and actions recommendation.",
+      icon: ShieldCheck,
+      getStatus: () => {
+        if (isRecheckingAsSupervisor) return "active";
+        if (auditStage === "idle" || auditStage === "ingesting" || auditStage === "primary_agent") return "pending";
+        if (auditStage === "verification_agent") return "active";
+        if (auditStage === "failed" && !activeAudit) return "failed";
+        return "completed";
+      },
+      statusText: () => {
+        if (isRecheckingAsSupervisor) return "Recheck running...";
+        if (auditStage === "idle" || auditStage === "ingesting" || auditStage === "primary_agent") return "Pending";
+        if (auditStage === "verification_agent") return "Validating consensus...";
+        return "Consensus Approved";
+      }
+    },
+    // 8. FINAL AUDIT AGENT: Consolidates the validated results into an immutable certified forensic report ready for the clinician registry and regulatory reporting.
+    {
+      id: "final",
+      name: "Final Audit",
+      desc: "Immutably certifies audit report and stages registration options.",
+      icon: Award,
+      getStatus: () => {
+        if (auditStage === "completed") return "completed";
+        if (auditStage === "failed") return "failed";
+        return "pending";
+      },
+      statusText: () => {
+        if (auditStage === "completed") return "Certified Report";
+        if (auditStage === "failed") return "Audit Failed";
+        return "Pending";
+      }
+    }
+  ];
+
   // Soft animation tick for rating gauge
   React.useEffect(() => {
     const timer = setInterval(() => {
@@ -350,39 +504,42 @@ export const InvestigatorWorkspace: React.FC<InvestigatorWorkspaceProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs font-mono">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold uppercase text-gray-400 block">Attending Doctor Name</label>
-                <input
-                  type="text"
-                  value={doctorName}
-                  onChange={(e) => setDoctorName(e.target.value)}
-                  className="w-full p-2.5 rounded-xl bg-[#090D14] border border-[#21262D] text-white focus:outline-none focus:border-blue-500 select-text"
-                />
+                <div className="w-full p-3 rounded-xl bg-[#090D14]/80 border border-[#21262D] text-blue-400 font-semibold text-xs flex items-center justify-between select-none shadow-sm">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${doctorName ? "bg-emerald-500 animate-pulse" : "bg-gray-600"}`}></span>
+                    <span className={`truncate ${doctorName ? "text-gray-200" : "text-gray-500"}`}>{doctorName || "Pending Ingestion"}</span>
+                  </div>
+                  <span className="text-[8px] text-gray-500 uppercase tracking-wider font-normal shrink-0">Auto-detected from file</span>
+                </div>
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold uppercase text-gray-400 block">Physician Specialization</label>
-                <input
-                  type="text"
-                  value={doctorSpecialization}
-                  onChange={(e) => setDoctorSpecialization(e.target.value)}
-                  className="w-full p-2.5 rounded-xl bg-[#090D14] border border-[#21262D] text-white focus:outline-none focus:border-blue-500 select-text"
-                />
+                <div className="w-full p-3 rounded-xl bg-[#090D14]/80 border border-[#21262D] text-blue-400 font-semibold text-xs flex items-center justify-between select-none shadow-sm">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${doctorSpecialization ? "bg-emerald-500 animate-pulse" : "bg-gray-600"}`}></span>
+                    <span className={`truncate ${doctorSpecialization ? "text-gray-200" : "text-gray-500"}`}>{doctorSpecialization || "Pending Ingestion"}</span>
+                  </div>
+                  <span className="text-[8px] text-gray-500 uppercase tracking-wider font-normal shrink-0">Auto-detected from file</span>
+                </div>
               </div>
               <div className="col-span-2 space-y-1.5">
                 <label className="text-[10px] font-bold uppercase text-gray-400 block">Hospital Facility Name</label>
-                <input
-                  type="text"
-                  value={hospitalName}
-                  onChange={(e) => setHospitalName(e.target.value)}
-                  className="w-full p-2.5 rounded-xl bg-[#090D14] border border-[#21262D] text-white focus:outline-none focus:border-blue-500 select-text"
-                />
+                <div className="w-full p-3 rounded-xl bg-[#090D14]/80 border border-[#21262D] text-blue-400 font-semibold text-xs flex items-center justify-between select-none shadow-sm">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${hospitalName ? "bg-emerald-500 animate-pulse" : "bg-gray-600"}`}></span>
+                    <span className={`truncate ${hospitalName ? "text-gray-200" : "text-gray-500"}`}>{hospitalName || "Pending Ingestion"}</span>
+                  </div>
+                  <span className="text-[8px] text-gray-500 uppercase tracking-wider font-normal shrink-0">Auto-detected from file</span>
+                </div>
               </div>
               <div className="col-span-2 space-y-1.5">
                 <label className="text-[10px] font-bold uppercase text-gray-400 block">Acuity Department Division</label>
                 <div className="w-full p-3 rounded-xl bg-[#090D14]/80 border border-[#21262D] text-blue-400 font-semibold text-xs flex items-center justify-between select-none shadow-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-                    <span>{department || "Not Assigned"}</span>
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${department ? "bg-emerald-500 animate-pulse" : "bg-gray-600"}`}></span>
+                    <span className={`truncate ${department ? "text-gray-200" : "text-gray-500"}`}>{department || "Pending Ingestion"}</span>
                   </div>
-                  <span className="text-[9px] text-gray-500 uppercase tracking-wider font-normal">Auto-detected from file</span>
+                  <span className="text-[8px] text-gray-500 uppercase tracking-wider font-normal shrink-0">Auto-detected from file</span>
                 </div>
               </div>
             </div>
@@ -425,66 +582,76 @@ export const InvestigatorWorkspace: React.FC<InvestigatorWorkspaceProps> = ({
             <div className="md:col-span-7 bg-[#121620] border border-[#21262D] rounded-2xl p-5 flex flex-col justify-between space-y-4">
               <div className="space-y-1 select-none">
                 <span className="text-[9px] font-bold text-blue-400 uppercase tracking-widest block font-mono">
-                  Dual-Agent Forensic Chronometer
+                  Multi-Agent Forensic Pipeline
                 </span>
                 <p className="text-[10px] text-gray-400 font-mono">
-                  Sequence mapping from document ingestion down to verified referee consensus.
+                  Real-time sequence tracing across specialized analytical agents.
                 </p>
               </div>
 
-              <div className="space-y-3 font-mono text-[10px]">
-                {/* Stage 1 */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`h-2.5 w-2.5 rounded-full ${
-                        auditStage === "completed" ||
-                        auditStage === "primary_agent" ||
-                        auditStage === "verification_agent"
-                          ? "bg-emerald-500"
-                          : auditStage === "ingesting"
-                          ? "bg-blue-500 animate-ping"
-                          : "bg-[#21262D]"
-                      }`}
-                    />
-                    <span className="text-white font-medium">1. Document Ingestion Pipeline</span>
-                  </div>
-                  <span className="text-gray-500">Passed</span>
-                </div>
+              <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1 select-none custom-scrollbar font-mono text-[10px]">
+                {pipelineSteps.map((step, idx) => {
+                  const status = step.getStatus();
+                  const IconComponent = step.icon;
+                  const statusTxt = step.statusText();
 
-                {/* Stage 2 */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`h-2.5 w-2.5 rounded-full ${
-                        auditStage === "completed" || auditStage === "verification_agent"
-                          ? "bg-emerald-500"
-                          : auditStage === "primary_agent"
-                          ? "bg-blue-500 animate-ping"
-                          : "bg-[#21262D]"
-                      }`}
-                    />
-                    <span className="text-white font-medium">2. Primary Agent Clinical Audit</span>
-                  </div>
-                  <span className="text-gray-500">Passed</span>
-                </div>
+                  let statusBadgeColor = "text-gray-500 bg-gray-900/40 border-gray-800/40";
+                  let iconColor = "text-gray-500";
+                  let bgCircleColor = "bg-[#161B22] border-[#21262D]";
+                  let pulseGlow = "";
 
-                {/* Stage 3 */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`h-2.5 w-2.5 rounded-full ${
-                        auditStage === "completed"
-                          ? "bg-emerald-500"
-                          : auditStage === "verification_agent"
-                          ? "bg-pink-500 animate-ping"
-                          : "bg-[#21262D]"
-                      }`}
-                    />
-                    <span className="text-white font-medium">3. Dual-Agent Verification Consensus</span>
-                  </div>
-                  <span className="text-gray-500">Passed</span>
-                </div>
+                  if (status === "completed") {
+                    statusBadgeColor = "text-emerald-400 bg-[#0e1f17] border-emerald-500/20";
+                    iconColor = "text-emerald-400";
+                    bgCircleColor = "bg-[#0e1f17] border-emerald-500/30";
+                  } else if (status === "active") {
+                    statusBadgeColor = "text-blue-400 bg-[#0c1827] border-blue-500/20 animate-pulse";
+                    iconColor = "text-blue-400";
+                    bgCircleColor = "bg-[#0c1827] border-blue-500/50";
+                    pulseGlow = "ring-2 ring-blue-500/20 animate-pulse";
+                  } else if (status === "failed") {
+                    statusBadgeColor = "text-red-400 bg-red-950/40 border-red-500/20";
+                    iconColor = "text-red-400";
+                    bgCircleColor = "bg-[#251515] border-red-500/30";
+                  }
+
+                  return (
+                    <div key={step.id} className="relative pl-8 pb-3.5 last:pb-0 group">
+                      {/* Timeline Connector Line */}
+                      {idx < pipelineSteps.length - 1 && (
+                        <div 
+                          className={`absolute left-[11px] top-6 bottom-0 w-0.5 border-l-2 border-dashed transition-colors duration-300 ${
+                            status === "completed" ? "border-emerald-500/30" : "border-[#21262D]"
+                          }`} 
+                        />
+                      )}
+
+                      {/* Icon Bullet */}
+                      <div className={`absolute left-0 top-0.5 w-6 h-6 rounded-full flex items-center justify-center transition-all duration-300 border ${bgCircleColor} ${pulseGlow}`}>
+                        {status === "active" ? (
+                          <RefreshCw className="w-3 h-3 animate-spin text-blue-400" />
+                        ) : (
+                          <IconComponent className={`w-3 h-3 transition-colors duration-300 ${iconColor}`} />
+                        )}
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-0.5">
+                          <span className={`font-bold transition-colors duration-300 ${status === "completed" ? "text-emerald-400" : status === "active" ? "text-blue-400" : "text-gray-300"}`}>
+                            {step.name}
+                          </span>
+                          <p className="text-[9px] text-[#8B949E] leading-normal font-sans group-hover:text-gray-300 transition-colors duration-300">
+                            {step.desc}
+                          </p>
+                        </div>
+                        <span className={`text-[8px] font-bold uppercase px-2 py-0.5 rounded border font-mono tracking-wider shrink-0 select-none ${statusBadgeColor}`}>
+                          {statusTxt}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="flex items-center justify-between border-t border-[#21262D] pt-4 mt-1 font-mono">

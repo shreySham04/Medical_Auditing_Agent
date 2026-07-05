@@ -30,6 +30,186 @@ export const AboutTab: React.FC<AboutTabProps> = ({ onGoToAuditor }) => {
         </div>
       </div>
 
+      {/* AGENTIC WORKFLOW PIPELINE BLUEPRINT */}
+      <div className="bg-[#121620] border border-[#21262D] rounded-2xl p-6 shadow-md select-none">
+        <div className="mb-6 space-y-1">
+          <span className="text-[9px] font-bold text-blue-400 uppercase tracking-widest block font-mono">
+            Clinical Forensics Architecture Blueprint
+          </span>
+          <h3 className="text-sm font-bold text-white tracking-tight font-sans">
+            Multi-Agent Consensus & Safety Evaluation Flow
+          </h3>
+          <p className="text-[10px] text-gray-400 leading-relaxed font-mono">
+            Detailed workflow representing the sequential hand-off, individual reasoning loops, and final consensus certification.
+          </p>
+        </div>
+
+        {/* Desktop Pipeline Visual Flow (horizontal with arrows) / Mobile stacked */}
+        <div className="hidden xl:flex items-stretch justify-between gap-2 overflow-x-auto pb-2 custom-scrollbar">
+          {/* Node 1: Medical PDF */}
+          <div className="flex-1 min-w-[120px] bg-[#090D14] border border-[#21262D] rounded-xl p-3.5 space-y-2 text-center relative group hover:border-blue-500/30 transition-all duration-300">
+            <div className="mx-auto w-8 h-8 rounded-full bg-blue-950/40 border border-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-xs font-mono">
+              1
+            </div>
+            <span className="text-[11px] font-bold text-white block font-mono">Medical PDF</span>
+            <p className="text-[9px] text-[#8B949E] leading-normal font-sans">
+              Source clinical record artifact ingested into system buffer.
+            </p>
+          </div>
+
+          <div className="flex items-center text-gray-600 font-bold select-none text-base px-1">→</div>
+
+          {/* Node 2: Document Agent */}
+          <div className="flex-1 min-w-[120px] bg-[#090D14] border border-[#21262D] rounded-xl p-3.5 space-y-2 text-center relative group hover:border-blue-500/30 transition-all duration-300">
+            <div className="mx-auto w-8 h-8 rounded-full bg-blue-950/40 border border-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-xs font-mono">
+              2
+            </div>
+            <span className="text-[11px] font-bold text-white block font-mono">Document Agent</span>
+            <p className="text-[9px] text-[#8B949E] leading-normal font-sans">
+              OCR, text extraction, structural sanitization & layout metadata parse.
+            </p>
+          </div>
+
+          <div className="flex items-center text-gray-600 font-bold select-none text-base px-1">→</div>
+
+          {/* Node 3: Clinical Agent */}
+          <div className="flex-1 min-w-[120px] bg-[#090D14] border border-[#21262D] rounded-xl p-3.5 space-y-2 text-center relative group hover:border-blue-500/30 transition-all duration-300">
+            <div className="mx-auto w-8 h-8 rounded-full bg-pink-950/40 border border-pink-500/20 text-pink-400 flex items-center justify-center font-bold text-xs font-mono">
+              3
+            </div>
+            <span className="text-[11px] font-bold text-white block font-mono">Clinical Agent</span>
+            <p className="text-[9px] text-[#8B949E] leading-normal font-sans">
+              Cross-references symptoms, vitals & standard clinical care guidelines.
+            </p>
+          </div>
+
+          <div className="flex items-center text-gray-600 font-bold select-none text-base px-1">→</div>
+
+          {/* Node 4: Billing Agent */}
+          <div className="flex-1 min-w-[120px] bg-[#090D14] border border-[#21262D] rounded-xl p-3.5 space-y-2 text-center relative group hover:border-blue-500/30 transition-all duration-300">
+            <div className="mx-auto w-8 h-8 rounded-full bg-pink-950/40 border border-pink-500/20 text-pink-400 flex items-center justify-center font-bold text-xs font-mono">
+              4
+            </div>
+            <span className="text-[11px] font-bold text-white block font-mono">Billing Agent</span>
+            <p className="text-[9px] text-[#8B949E] leading-normal font-sans">
+              Validates billing documentation, coding consistency, and detects upcoding indicators.
+            </p>
+          </div>
+
+          <div className="flex items-center text-gray-600 font-bold select-none text-base px-1">→</div>
+
+          {/* Node 5: Documentation Agent */}
+          <div className="flex-1 min-w-[120px] bg-[#090D14] border border-[#21262D] rounded-xl p-3.5 space-y-2 text-center relative group hover:border-blue-500/30 transition-all duration-300">
+            <div className="mx-auto w-8 h-8 rounded-full bg-purple-950/40 border border-purple-500/20 text-purple-400 flex items-center justify-center font-bold text-xs font-mono">
+              5
+            </div>
+            <span className="text-[11px] font-bold text-white block font-mono">Documentation Agent</span>
+            <p className="text-[9px] text-[#8B949E] leading-normal font-sans">
+              Validates attestation signatures, notes completeness & format.
+            </p>
+          </div>
+
+          <div className="flex items-center text-gray-600 font-bold select-none text-base px-1">→</div>
+
+          {/* Node 6: Timeline Agent */}
+          <div className="flex-1 min-w-[120px] bg-[#090D14] border border-[#21262D] rounded-xl p-3.5 space-y-2 text-center relative group hover:border-blue-500/30 transition-all duration-300">
+            <div className="mx-auto w-8 h-8 rounded-full bg-purple-950/40 border border-purple-500/20 text-purple-400 flex items-center justify-center font-bold text-xs font-mono">
+              6
+            </div>
+            <span className="text-[11px] font-bold text-white block font-mono">Timeline Agent</span>
+            <p className="text-[9px] text-[#8B949E] leading-normal font-sans">
+              Reconstructs chronological sequences of events and detects inconsistencies.
+            </p>
+          </div>
+
+          <div className="flex items-center text-gray-600 font-bold select-none text-base px-1">→</div>
+
+          {/* Node 7: Supervisor */}
+          <div className="flex-1 min-w-[120px] bg-[#090D14] border border-[#21262D] rounded-xl p-3.5 space-y-2 text-center relative group hover:border-blue-500/30 transition-all duration-300">
+            <div className="mx-auto w-8 h-8 rounded-full bg-amber-950/40 border border-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xs font-mono">
+              7
+            </div>
+            <span className="text-[11px] font-bold text-white block font-mono">Supervisor</span>
+            <p className="text-[9px] text-[#8B949E] leading-normal font-sans">
+              Performs red-team verification, penalizes hallucinations & scoring.
+            </p>
+          </div>
+
+          <div className="flex items-center text-gray-600 font-bold select-none text-base px-1">→</div>
+
+          {/* Node 8: Final Audit */}
+          <div className="flex-1 min-w-[120px] bg-[#090D14] border border-[#21262D] rounded-xl p-3.5 space-y-2 text-center relative group hover:border-blue-500/30 transition-all duration-300">
+            <div className="mx-auto w-8 h-8 rounded-full bg-emerald-950/40 border border-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs font-mono">
+              8
+            </div>
+            <span className="text-[11px] font-bold text-white block font-mono">Final Audit</span>
+            <p className="text-[9px] text-[#8B949E] leading-normal font-sans">
+              Consensus certified reports and board complaint transfer queue.
+            </p>
+          </div>
+        </div>
+
+        {/* Mobile Pipeline Flow (Stacked) */}
+        <div className="xl:hidden grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-[#090D14] border border-[#21262D] rounded-xl p-4 flex items-center gap-4">
+            <div className="w-8 h-8 shrink-0 rounded-full bg-blue-950/40 border border-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-xs font-mono">1</div>
+            <div>
+              <span className="text-xs font-bold text-white font-mono">Medical PDF</span>
+              <p className="text-[10px] text-gray-400 font-sans mt-0.5">Source clinical record artifact ingested into system buffer.</p>
+            </div>
+          </div>
+          <div className="bg-[#090D14] border border-[#21262D] rounded-xl p-4 flex items-center gap-4">
+            <div className="w-8 h-8 shrink-0 rounded-full bg-blue-950/40 border border-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-xs font-mono">2</div>
+            <div>
+              <span className="text-xs font-bold text-white font-mono">Document Agent</span>
+              <p className="text-[10px] text-gray-400 font-sans mt-0.5">OCR, text extraction, structural sanitization & layout metadata parse.</p>
+            </div>
+          </div>
+          <div className="bg-[#090D14] border border-[#21262D] rounded-xl p-4 flex items-center gap-4">
+            <div className="w-8 h-8 shrink-0 rounded-full bg-pink-950/40 border border-pink-500/20 text-pink-400 flex items-center justify-center font-bold text-xs font-mono">3</div>
+            <div>
+              <span className="text-xs font-bold text-white font-mono">Clinical Agent</span>
+              <p className="text-[10px] text-gray-400 font-sans mt-0.5">Cross-references symptoms, vitals & standard clinical care guidelines.</p>
+            </div>
+          </div>
+          <div className="bg-[#090D14] border border-[#21262D] rounded-xl p-4 flex items-center gap-4">
+            <div className="w-8 h-8 shrink-0 rounded-full bg-pink-950/40 border border-pink-500/20 text-pink-400 flex items-center justify-center font-bold text-xs font-mono">4</div>
+            <div>
+              <span className="text-xs font-bold text-white font-mono">Billing Agent</span>
+              <p className="text-[10px] text-gray-400 font-sans mt-0.5">Validates billing documentation, coding consistency, and detects upcoding indicators.</p>
+            </div>
+          </div>
+          <div className="bg-[#090D14] border border-[#21262D] rounded-xl p-4 flex items-center gap-4">
+            <div className="w-8 h-8 shrink-0 rounded-full bg-purple-950/40 border border-purple-500/20 text-purple-400 flex items-center justify-center font-bold text-xs font-mono">5</div>
+            <div>
+              <span className="text-xs font-bold text-white font-mono">Documentation Agent</span>
+              <p className="text-[10px] text-gray-400 font-sans mt-0.5">Validates attestation signatures, notes completeness & format.</p>
+            </div>
+          </div>
+          <div className="bg-[#090D14] border border-[#21262D] rounded-xl p-4 flex items-center gap-4">
+            <div className="w-8 h-8 shrink-0 rounded-full bg-purple-950/40 border border-purple-500/20 text-purple-400 flex items-center justify-center font-bold text-xs font-mono">6</div>
+            <div>
+              <span className="text-xs font-bold text-white font-mono">Timeline Agent</span>
+              <p className="text-[10px] text-gray-400 font-sans mt-0.5">Reconstructs chronological sequences of events and detects inconsistencies.</p>
+            </div>
+          </div>
+          <div className="bg-[#090D14] border border-[#21262D] rounded-xl p-4 flex items-center gap-4">
+            <div className="w-8 h-8 shrink-0 rounded-full bg-amber-950/40 border border-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xs font-mono">7</div>
+            <div>
+              <span className="text-xs font-bold text-white font-mono">Supervisor</span>
+              <p className="text-[10px] text-gray-400 font-sans mt-0.5">Performs red-team verification, penalizes hallucinations & scoring.</p>
+            </div>
+          </div>
+          <div className="bg-[#090D14] border border-[#21262D] rounded-xl p-4 flex items-center gap-4">
+            <div className="w-8 h-8 shrink-0 rounded-full bg-emerald-950/40 border border-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs font-mono">8</div>
+            <div>
+              <span className="text-xs font-bold text-white font-mono">Final Audit</span>
+              <p className="text-[10px] text-gray-400 font-sans mt-0.5">Consensus certified reports and board complaint transfer queue.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* TWO COLUMN CONTENT */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
