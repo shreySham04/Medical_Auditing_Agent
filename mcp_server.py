@@ -31,6 +31,9 @@ load_dotenv()
 # Initialize FastMCP Server
 mcp = FastMCP("forensic-medical-audit-mcp")
 
+# MCP tools expose controlled access to audit data.
+# External AI clients can request information
+# without directly accessing internal storage.
 @mcp.tool()
 async def audit_clinical_record(
     recordText: str,
@@ -40,25 +43,25 @@ async def audit_clinical_record(
     department: str = ""
 ) -> str:
     """
-    Perform a dual-agent forensic medical audit on raw clinical notes, medical records, or patient logs.
-    Detects clinical negligence, care pathway standard deviations, and financial billing upcoding.
+    Perform a 6-agent forensic medical audit on raw clinical notes, medical records, or patient logs.
+    Detects clinical negligence, care pathway standard deviations, administrative gaps, and CPT upcoding.
     """
     if not recordText.strip():
         return "Error: Clinical record text cannot be empty."
-
-    # Establish names and default fields
-    final_doctor = doctorName or "Dr. Angela Vance"
-    final_hospital = hospitalName or "Metro Heart Hospital"
-    final_dept = department or "Cardiology"
-    final_spec = "Cardiologist" if final_dept == "Cardiology" else "Medical Specialist"
 
     # Run ADK agent pipeline (asynchronously)
     pipeline_res = await run_forensic_pipeline(recordText, patient_name="Patient (MCP Ingested)")
     
     compliance_score = pipeline_res.get("complianceScore", 75)
     verdict = pipeline_res.get("verdict", "Pass")
-    risk_classification = "High" if compliance_score < 50 else ("Medium" if compliance_score < 80 else "Low")
+    risk_classification = pipeline_res.get("riskClassification", "Low")
     
+    # Extract structural names directly from the Document Agent parse
+    final_doctor = doctorName or pipeline_res.get("doctorName") or "Dr. Angela Vance"
+    final_hospital = hospitalName or pipeline_res.get("hospitalName") or "Metro Heart Hospital"
+    final_dept = department or pipeline_res.get("department") or "Cardiology"
+    final_spec = "Cardiologist" if final_dept == "Cardiology" else "Medical Specialist"
+
     # Save the audit to ForensicDB so it is visible on the Streamlit dashboard
     audit_id = f"mcp_{int(time.time())}"
     audit_payload = {
@@ -78,11 +81,11 @@ async def audit_clinical_record(
         "verdict": verdict,
         "providerReliabilityIndex": int(compliance_score * 0.9 + 10),
         "technicalMetrics": {
-            "docCompleteness": int(compliance_score * 0.95),
-            "recConsistency": int(compliance_score * 0.98),
-            "billingAccuracy": int(compliance_score * 0.92),
+            "docCompleteness": pipeline_res.get("documentationScore", int(compliance_score * 0.95)),
+            "recConsistency": pipeline_res.get("timelineScore", int(compliance_score * 0.98)),
+            "billingAccuracy": pipeline_res.get("billingScore", int(compliance_score * 0.92)),
             "upcodingScore": 100 if compliance_score >= 70 else int(compliance_score * 1.1),
-            "procedureCompliance": int(compliance_score * 0.96),
+            "procedureCompliance": pipeline_res.get("clinicalScore", int(compliance_score * 0.96)),
             "dataIntegrity": int(compliance_score * 0.97),
             "regulatoryScore": compliance_score
         },
@@ -97,7 +100,7 @@ async def audit_clinical_record(
         },
         "reportMarkdown": pipeline_res.get("reportMarkdown", "### Forensic Report"),
         "explainableAI": {
-            "whyScoreDropped": "The compliance score dropped due to clinical standard-of-care gaps or upcoded procedures." if compliance_score < 80 else "Score remained high with strong guideline adherence.",
+            "whyScoreDropped": "The compliance score dropped due to clinical standard-of-care gaps, incomplete documentation, or upcoded procedures." if compliance_score < 80 else "Score remained high with strong guideline adherence.",
             "findingsAffected": [f["description"] for f in pipeline_res.get("findings", [])],
             "evidenceFindings": [
                 {"finding": f["description"], "confidence": "Confirmed" if f["severity"] == "High" else "Likely", "explanation": f["type"]}
@@ -107,7 +110,7 @@ async def audit_clinical_record(
         },
         "patientSummary": {
             "gradeLevel": "8th Grade Patient Clarity Level",
-            "summaryText": f"The clinical forensic checkup completed. A compliance index of {compliance_score}% was calibrated.",
+            "summaryText": f"The clinical 6-agent forensic checkup completed. A compliance index of {compliance_score}% was calibrated.",
             "diagnoses": ["General Diagnostic Evaluation"],
             "medications": ["Under Compliance Review"],
             "followUpInstructions": ["Continuous healthcare standard checks"],
@@ -120,21 +123,21 @@ async def audit_clinical_record(
             "status": "PENDING REVIEW",
             "severityLevel": "Critical concern" if compliance_score < 50 else "Standard Deviation Review",
             "riskFactors": [f["description"] for f in pipeline_res.get("findings", [])],
-            "evidenceSummary": "Clinical and financial timeline mismatches detected by Google ADK multi-agent checks.",
+            "evidenceSummary": "Clinical, temporal and financial chronology mismatches detected by Google ADK multi-agent checks.",
             "evidenceLockerExcerpt": "Awaiting final medical board arbiter feedback."
         }
         
     # Save directly using our ForensicDB
     ForensicDB.save_audit(audit_payload)
     
-    summary_text = f"""### ✅ Multi-Agent Forensic Medical Audit Completed!
+    summary_text = f"""### ✅ 6-Agent Forensic Medical Audit Completed!
 
 **Audit ID:** {audit_id}
 **Lead Clinician:** {final_doctor}
 **Facility:** {final_hospital} ({final_dept})
 **Consensus Compliance Rating:** {compliance_score}/100
 **Final Verdict:** {verdict.upper()}
-**Forensic Audit Standard:** ADK Multi-Agent Evaluation (Clinical & Billing Chronology Checklist)
+**Forensic Audit Standard:** ADK 6-Agent Evaluation (Clinical, Billing, Documentation & Timeline Checklist)
 
 ---
 {pipeline_res.get('reportMarkdown', '')}

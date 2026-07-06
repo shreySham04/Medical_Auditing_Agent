@@ -534,10 +534,10 @@ if selected_tab == "🔍 Forensic Investigator":
                 status_box.success("🎉 Forensic Clinical Audit Completed Successfully!")
                 
                 # Parse metadata overrides
-                detected_doc = doctor_input or "Dr. Angela Vance"
+                detected_doc = doctor_input or pipeline_res.get("doctorName") or "Dr. Angela Vance"
                 detected_spec = "Cardiologist" if (dept_override == "Cardiology" or "cardio" in record_text.lower()) else "Specialist"
-                detected_hosp = hosp_input or "Metro Heart Hospital"
-                detected_dept = dept_override if dept_override != "Auto-detected" else "Cardiology"
+                detected_hosp = hosp_input or pipeline_res.get("hospitalName") or "Metro Heart Hospital"
+                detected_dept = dept_override if dept_override != "Auto-detected" else (pipeline_res.get("department") or "Cardiology")
                 
                 # Format JSON payload
                 audit_id = f"audit_{int(time.time()*1000)}"
@@ -559,12 +559,13 @@ if selected_tab == "🔍 Forensic Investigator":
                     "riskClassification": risk_classification,
                     "verdict": verdict,
                     "providerReliabilityIndex": int(compliance_score * 0.9 + 10),
+                    "reconstructed_timeline": pipeline_res.get("reconstructed_timeline", []),
                     "technicalMetrics": {
-                        "docCompleteness": int(compliance_score * 0.95),
-                        "recConsistency": int(compliance_score * 0.98),
-                        "billingAccuracy": int(compliance_score * 0.92),
+                        "docCompleteness": pipeline_res.get("documentationScore", int(compliance_score * 0.95)),
+                        "recConsistency": pipeline_res.get("timelineScore", int(compliance_score * 0.98)),
+                        "billingAccuracy": pipeline_res.get("billingScore", int(compliance_score * 0.92)),
                         "upcodingScore": 100 if compliance_score >= 70 else int(compliance_score * 1.1),
-                        "procedureCompliance": int(compliance_score * 0.96),
+                        "procedureCompliance": pipeline_res.get("clinicalScore", int(compliance_score * 0.96)),
                         "dataIntegrity": int(compliance_score * 0.97),
                         "regulatoryScore": compliance_score
                     },
@@ -692,6 +693,14 @@ if selected_tab == "🔍 Forensic Investigator":
                     st.markdown("**🧠 Explained Medical Terms:**")
                     for term in p_summary.get("explainedTerms", []):
                         st.markdown(f"**{term.get('term')}:** {term.get('definition')}")
+                
+                # Dynamic Timeline display from the Timeline Agent
+                timeline = audit.get("reconstructed_timeline", [])
+                if timeline:
+                    st.markdown("---")
+                    st.markdown("#### 🕒 Chronological Care Timeline (Reconstructed by Timeline Agent)")
+                    for event in timeline:
+                        st.markdown(f"⏱️ **{event.get('time')}** — {event.get('event')}")
                         
             with sub_tab4:
                 st.markdown("#### 📈 Multi-Agent Technical Metrics Breakdown")

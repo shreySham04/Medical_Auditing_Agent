@@ -95,7 +95,15 @@ def build_billing_agent() -> LlmAgent:
     )
 
 async def run_billing_agent(record_text: str) -> dict:
-    """Runs the Billing Auditor ADK agent on the clinical ledger."""
+    """
+    Runs the Billing Auditor ADK agent on the clinical ledger.
+
+    Design & Behavior:
+    - Billing Agent analyzes financial compliance, including CPT inconsistencies and possible upcoding.
+    - Operates completely separated from the Clinical Agent to avoid biased judgements.
+    """
+    # Billing Agent analyzes financial compliance,
+    # including CPT inconsistencies and possible upcoding.
     if not os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY") == "MY_GEMINI_API_KEY":
         # Offline/Simulation Fallback
         return {

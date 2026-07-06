@@ -98,7 +98,16 @@ def build_clinical_agent() -> LlmAgent:
     )
 
 async def run_clinical_agent(record_text: str) -> dict:
-    """Runs the Clinical Auditor ADK agent on the clinical notes."""
+    """
+    Runs the Clinical Auditor ADK agent on the clinical notes.
+
+    Design & Behavior:
+    - Clinical Agent focuses only on healthcare quality.
+    - Separation of responsibility prevents billing related signals from influencing clinical decisions.
+    """
+    # Clinical Agent focuses only on healthcare quality.
+    # Separation of responsibility prevents billing
+    # related signals from influencing clinical decisions.
     if not os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY") == "MY_GEMINI_API_KEY":
         # Offline/Simulation Fallback matching Applet Specs
         return {
