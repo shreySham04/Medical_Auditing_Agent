@@ -400,7 +400,7 @@ with st.sidebar:
     st.markdown("### 🗺️ CORE DEPARTMENTS")
     selected_tab = st.radio(
         "Navigation",
-        ["🔍 Forensic Investigator", "📋 Complaint Review Queue", "📊 Analytics & Registry", "📖 System Guide"],
+        ["🔍 Forensic Investigator", "💬 Forensic Copilot Chat", "📋 Complaint Review Queue", "📊 Analytics & Registry", "📖 System Guide"],
         label_visibility="collapsed"
     )
     
@@ -720,6 +720,83 @@ if selected_tab == "🔍 Forensic Investigator":
                     st.progress(h_metrics.get("treatmentAppropriateness", 80) / 100, f"Treatment Suitability Index: {h_metrics.get('treatmentAppropriateness')}%")
                     st.progress(h_metrics.get("patientSafetyScore", 80) / 100, f"Overall Patient Safety Level: {h_metrics.get('patientSafetyScore')}%")
                     st.progress(h_metrics.get("carePathwayCompliance", 80) / 100, f"Standard Care Pathways Alignment: {h_metrics.get('carePathwayCompliance')}%")
+
+
+# --- TAB 1.5: FORENSIC COPILOT CHAT ---
+
+elif selected_tab == "💬 Forensic Copilot Chat":
+    st.markdown("## 💬 Forensic Copilot Interactive Chatbot")
+    st.markdown(
+        "<p style='color: #8B949E; font-size: 12px; margin-top: -10px;'>"
+        "Query the ForensicDB registry, get regulatory clarification, or explore clinical standard-of-care guidelines."
+        "</p>", unsafe_allow_html=True
+    )
+    
+    # Initialize chat history
+    if "chat_history" not in st.session_state:
+        st.session_state["chat_history"] = [
+            {
+                "role": "assistant",
+                "content": (
+                    "Welcome to **MAuditor Companion**. I am your clinical forensic auditor co-pilot.\n\n"
+                    "I can help analyze your clinical audit registry, explain CPT billing codes, check for upcoding patterns, "
+                    "or discuss standard-of-care guidelines."
+                )
+            }
+        ]
+        
+    # Render past chat history
+    for message in st.session_state["chat_history"]:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+            
+    # Suggestions / Quick Prompts
+    st.markdown("<br>", unsafe_allow_html=True)
+    cols = st.columns([1, 1, 1])
+    quick_prompt = None
+    
+    with cols[0]:
+        if st.button("📊 List Stored Case Audits", use_container_width=True):
+            quick_prompt = "List all stored forensic case audits in the database."
+    with cols[1]:
+        if st.button("📉 Explain Billing Upcoding", use_container_width=True):
+            quick_prompt = "Explain what billing upcoding and CPT unbundling means in forensic auditing."
+    with cols[2]:
+        if st.button("🏥 Cardiology Standard of Care", use_container_width=True):
+            quick_prompt = "What are the standard-of-care guidelines and red flags for Cardiology?"
+            
+    # Process user text input
+    user_query = st.chat_input("Ask a clinical auditing question...")
+    
+    # If a quick prompt was clicked, override the user query
+    if quick_prompt:
+        user_query = quick_prompt
+        
+    if user_query:
+        # Display user message in chat container
+        with st.chat_message("user"):
+            st.markdown(user_query)
+        # Add to state
+        st.session_state["chat_history"].append({"role": "user", "content": user_query})
+        
+        # Call agent
+        with st.spinner("MAuditor is reviewing clinical standards and database records..."):
+            import asyncio
+            from agents.chatbot_agent import run_chatbot_session
+            
+            try:
+                # Run the async agent session
+                response = asyncio.run(run_chatbot_session(user_query, st.session_state["chat_history"][:-1]))
+            except Exception as e:
+                response = f"An error occurred while running the chatbot agent: {str(e)}"
+                
+        # Display assistant response in chat container
+        with st.chat_message("assistant"):
+            st.markdown(response)
+            
+        # Add to state and refresh
+        st.session_state["chat_history"].append({"role": "assistant", "content": response})
+        st.rerun()
 
 
 # --- TAB 2: COMPLAINT REVIEW QUEUE ---
