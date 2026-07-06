@@ -327,7 +327,9 @@ export default function App() {
           System Status: {appStatus}
         </span>
         <div className="flex gap-4 select-none">
-          <span className="text-emerald-500 font-semibold">⚡ POSITIVE INTEGRATION READY</span>
+          <span className={activeAudit ? "text-emerald-500 font-semibold" : "text-gray-500 font-semibold"}>
+            ⚡ POSITIVE INTEGRATION READY
+          </span>
           <span>© 2026 MedicalAuditor Forensics Hub</span>
         </div>
       </footer>

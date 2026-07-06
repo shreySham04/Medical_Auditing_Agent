@@ -204,6 +204,8 @@ function auditReducer(state: AuditState, action: AuditAction): AuditState {
         ...state,
         activeAudit: null,
         selectedAuditId: null,
+        auditStage: "idle",
+        auditStageMessage: "",
         transientVerdictText: "Awaiting audit...",
         transientVerdictState: "none"
       };
