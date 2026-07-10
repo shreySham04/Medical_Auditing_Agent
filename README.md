@@ -219,4 +219,4 @@ mcp dev mcp_server.py
 - **Compliance Edge Calibration**: The agents are trained explicitly on HIPAA documentation, AMA CPT guidelines, and AAOS orthopedics criteria, preventing subjective rating drifts.
 
 ---
-*Created and optimized for the Google AI Studio Build Competition.*
+
