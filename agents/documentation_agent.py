@@ -3,16 +3,24 @@ import sys
 import json
 import asyncio
 from pathlib import Path
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-load_dotenv()
-
-from google.adk.agents import LlmAgent
-from google.adk.models.lite_llm import LiteLlm
-from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
-from google.genai import types as genai_types
+try:
+    from google.adk.agents import LlmAgent
+    from google.adk.models.lite_llm import LiteLlm
+    from google.adk.runners import Runner
+    from google.adk.sessions import InMemorySessionService
+    from google.genai import types as genai_types
+except ImportError:
+    LlmAgent = None
+    LiteLlm = None
+    Runner = None
+    InMemorySessionService = None
+    genai_types = None
 
 # ── Documentation Agent System Prompt ──────────────────────────────────────
 
@@ -48,7 +56,7 @@ def build_documentation_agent() -> LlmAgent:
 
 async def run_documentation_agent(record_text: str) -> dict:
     """Runs the Documentation Compliance Agent to evaluate record completeness."""
-    if not os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY") == "MY_GEMINI_API_KEY":
+    if not os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY") == "MY_GEMINI_API_KEY" or LiteLlm is None:
         # Offline simulation fallback
         text_lower = record_text.lower()
         has_sig = "signed" in text_lower or "signature" in text_lower or "dr." in text_lower

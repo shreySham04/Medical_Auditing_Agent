@@ -1,36 +1,96 @@
 import os
 import json
 import uuid
+import sqlite3
 import datetime
 from pathlib import Path
 
-AUDITS_DIR = Path(__file__).parent.parent / "audits"
-AUDITS_DIR.mkdir(parents=True, exist_ok=True)
+DB_DIR = Path(__file__).parent.parent / "audits"
+DB_DIR.mkdir(parents=True, exist_ok=True)
+SQLITE_DB_PATH = DB_DIR / "forensic_audits.db"
 
 class ForensicDB:
     @staticmethod
+    def _get_conn():
+        conn = sqlite3.connect(str(SQLITE_DB_PATH))
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    @staticmethod
+    def init_db():
+        """Initializes SQLite schema without seeding dummy sample reports."""
+        with ForensicDB._get_conn() as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS forensic_audits (
+                    id TEXT PRIMARY KEY,
+                    patient_name TEXT,
+                    doctor_name TEXT,
+                    hospital_name TEXT,
+                    department TEXT,
+                    compliance_score INTEGER,
+                    verdict TEXT,
+                    risk_classification TEXT,
+                    clinical_score INTEGER,
+                    billing_score INTEGER,
+                    documentation_score INTEGER,
+                    timeline_score INTEGER,
+                    report_markdown TEXT,
+                    findings_json TEXT,
+                    explained_terms_json TEXT,
+                    raw_record_text TEXT,
+                    data_json TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+
+    @staticmethod
     def get_all_audits() -> list:
-        """Loads and returns all audited files from the audits directory."""
+        """Loads and returns all real saved audits from SQLite database."""
+        ForensicDB.init_db()
         audits = []
-        for file_path in AUDITS_DIR.glob("*.json"):
-            try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    # Add simple safeguard attributes
-                    if "id" not in data:
-                        data["id"] = file_path.stem
-                    if "savedPath" not in data:
-                        data["savedPath"] = str(file_path)
-                    audits.append(data)
-            except Exception as e:
-                print(f"Error loading audit file {file_path}: {e}")
-        # Sort by compliance score (critical/failed cases first) or alphabetical
-        return sorted(audits, key=lambda x: x.get("complianceScore", 100))
+        try:
+            with ForensicDB._get_conn() as conn:
+                cursor = conn.execute("SELECT data_json FROM forensic_audits ORDER BY created_at DESC")
+                for row in cursor.fetchall():
+                    try:
+                        record = json.loads(row["data_json"])
+                        audits.append(record)
+                    except Exception as e:
+                        print(f"Error parsing audit JSON: {e}")
+        except Exception as e:
+            print(f"Database query error: {e}")
+
+        # Also check file system fallback if json files exist
+        if not audits:
+            for file_path in DB_DIR.glob("*.json"):
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        if "id" not in data:
+                            data["id"] = file_path.stem
+                        audits.append(data)
+                except Exception:
+                    pass
+
+        return audits
 
     @staticmethod
     def get_audit_by_id(audit_id: str) -> dict:
-        """Retrieves a specific JSON audit report."""
-        file_path = AUDITS_DIR / f"{audit_id}.json"
+        """Retrieves a specific audit report by ID from SQLite DB."""
+        ForensicDB.init_db()
+        try:
+            with ForensicDB._get_conn() as conn:
+                cursor = conn.execute("SELECT data_json FROM forensic_audits WHERE id = ?", (str(audit_id),))
+                row = cursor.fetchone()
+                if row:
+                    return json.loads(row["data_json"])
+        except Exception as e:
+            print(f"Database lookup error for {audit_id}: {e}")
+
+        # Fallback to disk file
+        file_path = DB_DIR / f"{audit_id}.json"
         if file_path.exists():
             try:
                 with open(file_path, "r", encoding="utf-8") as f:
@@ -40,136 +100,119 @@ class ForensicDB:
         return None
 
     @staticmethod
-    def save_audit(audit_data: dict) -> str:
-        """Saves or updates an audit session as JSON and writes corresponding report Markdown."""
-        audit_id = audit_data.get("id") or str(uuid.uuid4())[:8]
+    def save_audit(audit_data: dict) -> dict:
+        """Persistently saves or updates an audit session in SQLite DB and writes corresponding JSON/Markdown."""
+        ForensicDB.init_db()
+        audit_id = audit_data.get("id") or audit_data.get("case_id") or f"AUD-{int(datetime.datetime.now().timestamp() * 1000) % 100000}"
         audit_data["id"] = audit_id
+        audit_data["case_id"] = audit_id
         
-        # Add metadata
+        now_iso = datetime.datetime.now().isoformat()
         if "timestamp" not in audit_data:
-            audit_data["timestamp"] = datetime.datetime.now().isoformat()
-        
-        # Save JSON file
-        json_path = AUDITS_DIR / f"{audit_id}.json"
-        audit_data["savedPath"] = str(json_path)
-        with open(json_path, "w", encoding="utf-8") as f:
-            json.dump(audit_data, f, indent=2, ensure_ascii=False)
+            audit_data["timestamp"] = now_iso
             
-        # Save Markdown Report file
-        markdown_path = AUDITS_DIR / f"{audit_id}_report.md"
-        with open(markdown_path, "w", encoding="utf-8") as f:
-            f.write(audit_data.get("reportMarkdown", "# Clinical Forensic Report"))
-            
-        return audit_id
+        patient = audit_data.get("patientName") or audit_data.get("patient_name") or "Patient Record"
+        doctor = audit_data.get("doctorName") or audit_data.get("doctor_name") or "Attending Physician"
+        hospital = audit_data.get("hospitalName") or audit_data.get("hospital") or "Medical Center"
+        department = audit_data.get("department") or "Clinical Department"
+        score = audit_data.get("complianceScore") or audit_data.get("compliance_rating") or audit_data.get("primaryScore") or 0
+        verdict = audit_data.get("verdict") or ("Pass" if score >= 80 else "Flagged" if score >= 50 else "Failed")
+        risk = audit_data.get("riskClassification") or audit_data.get("risk_classification") or "STANDARD_MONITORING"
+        clinical_score = audit_data.get("clinicalScore") or 0
+        billing_score = audit_data.get("billingScore") or 0
+        doc_score = audit_data.get("documentationScore") or 0
+        time_score = audit_data.get("timelineScore") or 0
+        report_md = audit_data.get("reportMarkdown") or audit_data.get("report_markdown") or "# Clinical Forensic Report"
+        findings_json = json.dumps(audit_data.get("findings", []))
+        explained_terms_json = json.dumps(audit_data.get("explainedTerms", []))
+        raw_text = audit_data.get("rawRecordText") or ""
+        full_json = json.dumps(audit_data, ensure_ascii=False)
 
-    @staticmethod
-    def update_complaint_status(audit_id: str, new_status: str) -> bool:
-        """Updates the regulatory complaint/dispute status of a record."""
-        audit = ForensicDB.get_audit_by_id(audit_id)
-        if audit:
-            audit["complaintStatus"] = new_status
-            ForensicDB.save_audit(audit)
-            return True
-        return False
+        # 1. Upsert into SQLite
+        try:
+            with ForensicDB._get_conn() as conn:
+                conn.execute("""
+                    INSERT INTO forensic_audits (
+                        id, patient_name, doctor_name, hospital_name, department,
+                        compliance_score, verdict, risk_classification,
+                        clinical_score, billing_score, documentation_score, timeline_score,
+                        report_markdown, findings_json, explained_terms_json,
+                        raw_record_text, data_json, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        patient_name=excluded.patient_name,
+                        doctor_name=excluded.doctor_name,
+                        hospital_name=excluded.hospital_name,
+                        department=excluded.department,
+                        compliance_score=excluded.compliance_score,
+                        verdict=excluded.verdict,
+                        risk_classification=excluded.risk_classification,
+                        clinical_score=excluded.clinical_score,
+                        billing_score=excluded.billing_score,
+                        documentation_score=excluded.documentation_score,
+                        timeline_score=excluded.timeline_score,
+                        report_markdown=excluded.report_markdown,
+                        findings_json=excluded.findings_json,
+                        explained_terms_json=excluded.explained_terms_json,
+                        raw_record_text=excluded.raw_record_text,
+                        data_json=excluded.data_json,
+                        updated_at=excluded.updated_at
+                """, (
+                    str(audit_id), patient, doctor, hospital, department,
+                    int(score), verdict, risk,
+                    int(clinical_score), int(billing_score), int(doc_score), int(time_score),
+                    report_md, findings_json, explained_terms_json,
+                    raw_text, full_json, now_iso
+                ))
+                conn.commit()
+        except Exception as e:
+            print(f"SQLite save error: {e}")
+
+        # 2. Persist JSON & Markdown backup files
+        try:
+            json_path = DB_DIR / f"{audit_id}.json"
+            audit_data["savedPath"] = str(json_path)
+            with open(json_path, "w", encoding="utf-8") as f:
+                json.dump(audit_data, f, indent=2, ensure_ascii=False)
+
+            markdown_path = DB_DIR / f"{audit_id}_report.md"
+            with open(markdown_path, "w", encoding="utf-8") as f:
+                f.write(report_md)
+        except Exception as e:
+            print(f"File backup save error: {e}")
+
+        return audit_data
 
     @staticmethod
     def purge_audit(audit_id: str) -> bool:
-        """Deletes both JSON and Markdown files associated with the audit ID."""
-        json_path = AUDITS_DIR / f"{audit_id}.json"
-        markdown_path = AUDITS_DIR / f"{audit_id}_report.md"
-        
+        """Deletes audit record from SQLite DB and files."""
+        ForensicDB.init_db()
         deleted = False
+        try:
+            with ForensicDB._get_conn() as conn:
+                cursor = conn.execute("DELETE FROM forensic_audits WHERE id = ?", (str(audit_id),))
+                conn.commit()
+                if cursor.rowcount > 0:
+                    deleted = True
+        except Exception as e:
+            print(f"SQLite purge error: {e}")
+
+        json_path = DB_DIR / f"{audit_id}.json"
+        markdown_path = DB_DIR / f"{audit_id}_report.md"
+        
         if json_path.exists():
-            json_path.unlink()
-            deleted = True
+            try:
+                json_path.unlink()
+                deleted = True
+            except Exception:
+                pass
         if markdown_path.exists():
-            markdown_path.unlink()
-            deleted = True
+            try:
+                markdown_path.unlink()
+                deleted = True
+            except Exception:
+                pass
         return deleted
 
-    @staticmethod
-    def seed_initial_records():
-        """Seeds standard test compliance files if the directory is empty."""
-        existing = list(AUDITS_DIR.glob("*.json"))
-        if len(existing) > 0:
-            return
-            
-        seed_cases = [
-            {
-                "id": "CASE-101",
-                "patientName": "Sarah Jenkins",
-                "complianceScore": 42,
-                "verdict": "Flagged",
-                "clinicalScore": 58,
-                "billingScore": 30,
-                "clinicalGrade": "D+",
-                "billingGrade": "F",
-                "complaintStatus": "In Review",
-                "fileName": "jenkins_cardiac_ledger.txt",
-                "doctorName": "Dr. Angela Vance",
-                "doctorSpecialization": "Cardiology",
-                "hospitalName": "Metro Heart Hospital",
-                "department": "Cardiology",
-                "timestamp": "2026-07-06T09:00:00Z",
-                "reportMarkdown": """# 🛡️ Medical Auditor V2.1 Forensic Report
-**Patient Name:** Sarah Jenkins
-**Calibrated Compliance Rating:** 42/100 (**Flagged**)
-
----
-### 🩺 Clinical Care Quality Review
-- Standard gaps: Unexplained delay in cardiac enzyme testing; patient discharge approved with blood pressure at 165/100.
-- Vitals omitted in checkups.
-
-### 💳 Financial Ledger Transparency Review
-- Significant Billing Upcoding identified.
-- Billed Code: **CPT 99291 (Critical Care, 30-74 minutes)** ($1,200).
-- Fact check: The emergency clinical notes explicitly show the doctor visited for only 12 minutes. This constitutes financial upcoding.
-""",
-                "explainedTerms": [
-                    {"term": "CPT 99291", "definition": "Critical Care service code requiring 30-74 minutes of bedside monitoring."},
-                    {"term": "Cardiac Troponin", "definition": "Biomarker released during myocardial damage."}
-                ],
-                "findings": [
-                    {"id": "CLIN-01", "type": "Clinical Deviation", "description": "Patient discharge approved with high BP (165/100)", "severity": "High"},
-                    {"id": "BILL-01", "type": "Billing Inflation", "description": "Upcoded outpatient visit to CPT 99291 without supporting duration logs", "severity": "Critical"}
-                ]
-            },
-            {
-                "id": "CASE-102",
-                "patientName": "Robert Davis",
-                "complianceScore": 92,
-                "verdict": "Pass",
-                "clinicalScore": 95,
-                "billingScore": 88,
-                "clinicalGrade": "A",
-                "billingGrade": "B+",
-                "complaintStatus": "Resolved",
-                "fileName": "davis_ortho_log.txt",
-                "doctorName": "Dr. Tyler Chase",
-                "doctorSpecialization": "Orthopedics",
-                "hospitalName": "County Bone & Joint Clinic",
-                "department": "Orthopedics",
-                "timestamp": "2026-07-05T14:30:00Z",
-                "reportMarkdown": """# 🛡️ Medical Auditor V2.1 Forensic Report
-**Patient Name:** Robert Davis
-**Calibrated Compliance Rating:** 92/100 (**Pass**)
-
----
-### 🩺 Clinical Care Quality Review
-- Exquisite compliance with AAOS Fracture reduction guidelines.
-- Distal pulses and post-reduction X-rays perfectly documented.
-""",
-                "explainedTerms": [
-                    {"term": "Fracture Reduction", "definition": "Surgical or clinical realignment of fractured bone pieces."}
-                ],
-                "findings": [
-                    {"id": "SAFE-01", "type": "Safe Operations", "description": "No critical deviations detected. Compliance standards exceeded.", "severity": "Low"}
-                ]
-            }
-        ]
-        
-        for case in seed_cases:
-            ForensicDB.save_audit(case)
-
-# Seed database immediately on module import
-ForensicDB.seed_initial_records()
+# Initialize database schema immediately without seeding unnecessary sample data
+ForensicDB.init_db()

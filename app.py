@@ -400,7 +400,7 @@ with st.sidebar:
     st.markdown("### 🗺️ CORE DEPARTMENTS")
     selected_tab = st.radio(
         "Navigation",
-        ["🔍 Forensic Investigator", "💬 Forensic Copilot Chat", "📋 Complaint Review Queue", "📊 Analytics & Registry", "📖 System Guide"],
+        ["🔍 Forensic Investigator", "💬 Forensic Copilot Chat", "📋 Complaint Review Queue", "🎓 Training Dataset & Benchmark", "📊 Analytics & Registry", "📖 System Guide"],
         label_visibility="collapsed"
     )
     
@@ -876,6 +876,156 @@ elif selected_tab == "📋 Complaint Review Queue":
                     st.success(f"Status successfully updated to: {new_status}!")
                     time.sleep(1.0)
                     st.rerun()
+
+                st.markdown("---")
+                reaudit_btn = st.button("🔎 RECHECK DETAILS (RE-AUDIT FILE)", use_container_width=True, help="Re-run multi-agent forensic evaluation pipeline on this case file")
+                
+                if reaudit_btn:
+                    with st.spinner("Re-auditing case file with multi-agent pipeline..."):
+                        import asyncio
+                        from agents.referee_agent import run_forensic_pipeline
+                        from tools.database import ForensicDB
+                        
+                        rec_text = case.get("reportMarkdown", "Clinical Record Audit")
+                        p_name = case.get("patientName", "Patient")
+                        
+                        pipeline_res = asyncio.run(run_forensic_pipeline(rec_text, patient_name=p_name))
+                        case["complianceScore"] = pipeline_res.get("complianceScore", case.get("complianceScore", 75))
+                        case["verdict"] = pipeline_res.get("verdict", case.get("verdict", "Flagged"))
+                        case["reportMarkdown"] = pipeline_res.get("reportMarkdown", case.get("reportMarkdown", ""))
+                        
+                        ForensicDB.save_audit(case)
+                        st.session_state["active_audit_id"] = case["id"]
+                        st.session_state["selected_tab"] = "🔍 Forensic Investigator"
+                        st.success("Re-audit complete! Redirecting to refreshed report details...")
+                        time.sleep(1.0)
+                        st.rerun()
+
+
+# --- TAB 2.5: TRAINING DATASET & BENCHMARK ---
+
+elif selected_tab == "🎓 Training Dataset & Benchmark":
+    from tools.training_dataset import TrainingDataset
+    all_samples = TrainingDataset.get_all_samples()
+    topics = TrainingDataset.get_topics()
+    total_samples = len(all_samples)
+
+    st.markdown(f"## 🎓 {total_samples:,}-Sample Medical Forensic Training & Benchmark Dataset")
+    st.markdown(
+        "<p style='color: #8B949E; font-size: 12px; margin-top: -10px;'>"
+        f"Curated ground-truth clinical and billing training dataset spanning {len(topics)} medical specialties for fine-tuning, few-shot grounding, and model evaluation."
+        "</p>", unsafe_allow_html=True
+    )
+    
+    # Dataset Summary Metrics
+    pass_samples = sum(1 for s in all_samples if s["verdict"] == "Pass")
+    flagged_samples = sum(1 for s in all_samples if s["verdict"] == "Flagged")
+    failed_samples = sum(1 for s in all_samples if s["verdict"] == "Failed")
+    upcoding_samples = sum(1 for s in all_samples if s["upcodingDetected"])
+    
+    m1, m2, m3, m4, m5 = st.columns(5)
+    with m1:
+        st.metric("Total Training Reports", f"{total_samples:,}")
+    with m2:
+        st.metric("Medical Specialties", len(topics))
+    with m3:
+        st.metric("Ground-Truth Pass", f"{pass_samples:,}")
+    with m4:
+        st.metric("Flagged / Failed", f"{(flagged_samples + failed_samples):,}")
+    with m5:
+        st.metric("Upcoding Benchmarks", f"{upcoding_samples:,}")
+        
+    st.markdown("---")
+    
+    # Filter Controls
+    f_col1, f_col2, f_col3 = st.columns([1, 1, 2])
+    with f_col1:
+        selected_topic = st.selectbox("Filter Specialty", ["All Topics"] + topics)
+    with f_col2:
+        selected_verdict = st.selectbox("Filter Verdict", ["All Verdicts", "Pass", "Flagged", "Failed"])
+    with f_col3:
+        search_query = st.text_input("🔍 Search 10,000 Dataset (CPT, condition, doctor, ID)", placeholder="e.g. CPT 99291, TS-00500, Cardiology, Dr. Vance...")
+        
+    filtered = TrainingDataset.get_samples_by_topic(selected_topic)
+    if selected_verdict != "All Verdicts":
+        filtered = [s for s in filtered if s["verdict"] == selected_verdict]
+
+    if search_query:
+        q = search_query.lower()
+        filtered = [
+            s for s in filtered 
+            if q in s["title"].lower() 
+            or q in s["cptBilled"].lower() 
+            or q in s["recordText"].lower() 
+            or q in s["primaryViolation"].lower()
+            or q in s["doctorName"].lower()
+            or q in s["id"].lower()
+        ]
+        
+    st.write(f"Showing **{len(filtered):,}** matching training reports:")
+    
+    # Render Dataset Table / Expanders (Top 25)
+    for sample in filtered[:25]:
+        v_color = "#56d364" if sample["verdict"] == "Pass" else ("#e3b341" if sample["verdict"] == "Flagged" else "#f78166")
+        with st.expander(f"📌 [{sample['id']}] {sample['topic']} — {sample['title']} (Score: {sample['complianceScore']}/100)"):
+            c1, c2 = st.columns([2, 1])
+            with c1:
+                st.markdown(f"**Patient:** {sample['patientName']} | **Doctor:** {sample['doctorName']} | **Facility:** {sample['hospitalName']}")
+                st.markdown(f"**Billed CPT:** `{sample['cptBilled']}` | **Recommended CPT:** `{sample['cptRecommended']}`")
+                st.markdown(f"**Primary Violation / Finding:** {sample['primaryViolation']}")
+                st.text_area(f"Clinical Note & Ledger [{sample['id']}]", sample["recordText"], height=120, disabled=True)
+            with c2:
+                st.markdown(
+                    f"<div style='border: 1px solid #30363d; padding: 10px; border-radius: 8px; background-color: #161b22; text-align: center;'>"
+                    f"<span style='color: {v_color}; font-size: 20px; font-weight: bold;'>{sample['verdict']}</span><br>"
+                    f"<span style='font-size: 28px; font-weight: bold;'>{sample['complianceScore']}/100</span><br>"
+                    f"<span style='color: #8B949E; font-size: 11px;'>Risk: {sample['riskClassification']}</span>"
+                    f"</div>",
+                    unsafe_allow_html=True
+                )
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                # Run benchmark on this sample button
+                if st.button(f"🔬 Benchmark Agents on #{sample['id']}", key=f"btn_{sample['id']}"):
+                    with st.spinner(f"Running multi-agent audit on training sample {sample['id']}..."):
+                        from agents.referee_agent import run_forensic_pipeline
+                        import asyncio
+                        
+                        res = asyncio.run(run_forensic_pipeline(sample["recordText"], sample["patientName"]))
+                        pred_score = res.get("complianceScore", 0)
+                        diff = abs(pred_score - sample["complianceScore"])
+                        
+                        st.markdown(f"#### 🎯 Benchmark Result for #{sample['id']}")
+                        st.write(f"- Ground-Truth Score: **{sample['complianceScore']}**")
+                        st.write(f"- Agent Predicted Score: **{pred_score}**")
+                        st.write(f"- Alignment Delta: **{diff} points** ({'Perfect Match' if diff <= 5 else 'Within Tolerance'})")
+                        st.write(f"- Predicted Verdict: **{res.get('verdict')}**")
+                        
+    if len(filtered) > 25:
+        st.info(f"Showing top 25 of {len(filtered):,} matching training reports. Refine search filters to explore more cases.")
+
+    st.markdown("---")
+    st.markdown("### 📥 Export Training Dataset")
+    e_col1, e_col2 = st.columns(2)
+    with e_col1:
+        import json
+        json_bytes = json.dumps(all_samples[:1000], indent=2).encode('utf-8')
+        st.download_button(
+            label=f"⬇️ Download Sample Training Dataset (1,000 JSON Reports)",
+            data=json_bytes,
+            file_name="mauditor_10k_training_samples.json",
+            mime="application/json"
+        )
+    with e_col2:
+        import pandas as pd
+        df_samples = pd.DataFrame(all_samples)
+        csv_bytes = df_samples.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label=f"⬇️ Download Full Training Index ({len(all_samples):,} Reports CSV)",
+            data=csv_bytes,
+            file_name="mauditor_10k_training_samples_index.csv",
+            mime="text/csv"
+        )
 
 
 # --- TAB 3: ANALYTICS & REGISTRY ---

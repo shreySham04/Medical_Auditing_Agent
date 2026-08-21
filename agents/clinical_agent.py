@@ -3,52 +3,47 @@ import sys
 import json
 import asyncio
 from pathlib import Path
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
-# Ensure local imports work
-sys.path.insert(0, str(Path(__file__).parent.parent))
+try:
+    from google.adk.agents import LlmAgent
+    from google.adk.models.lite_llm import LiteLlm
+    from google.adk.runners import Runner
+    from google.adk.sessions import InMemorySessionService
+    from google.genai import types as genai_types
+except ImportError:
+    LlmAgent = None
+    LiteLlm = None
+    Runner = None
+    InMemorySessionService = None
+    genai_types = None
 
-# Load environment variables
-load_dotenv()
+# ── Dynamic Clinical Standard Guidelines (RAG Tool) ─────────────────────────
 
-from google.adk.agents import LlmAgent
-from google.adk.models.lite_llm import LiteLlm
-from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
-from google.genai import types as genai_types
-
-# ── Clinical Standard Guidelines (Reference Tool) ──────────────────────────
-
-def lookup_clinical_standards(condition: str) -> dict:
+def lookup_clinical_standards(condition: str = "", clinical_context: str = "") -> dict:
     """
-    Returns the standard of care reference guidelines for clinical evaluation.
-    Matches standard protocols for Cardiology, Orthopedics, and Radiology.
+    Dynamically retrieves standard-of-care clinical practice guidelines across medical disciplines
+    (ACC/AHA Cardiology, AASLD Hepatology, ATS/IDSA Pulmonology, Surviving Sepsis, AAOS Orthopedics, SHM Hospitalist).
     """
-    cond_lower = condition.lower()
-    if "cardio" in cond_lower or "chest" in cond_lower or "heart" in cond_lower:
-        return {
-            "department": "Cardiology",
-            "required_vitals": ["Heart Rate", "Blood Pressure", "SpO2", "Respiratory Rate"],
-            "critical_tests": ["ECG (within 10 minutes)", "Troponin levels (at least 2 checks)"],
-            "red_flags": ["Undocumented chest pain radiation", "Omitted post-discharge cardiac enzyme confirmation"],
-            "standards": "AHA/ACC Chest Pain Guidelines 2021"
-        }
-    elif "ortho" in cond_lower or "bone" in cond_lower or "fracture" in cond_lower:
-        return {
-            "department": "Orthopedics",
-            "required_vitals": ["Pain Score", "Neurovascular Status (Distal Pulse, Sensation)"],
-            "critical_tests": ["X-Ray (Pre and Post reduction if applicable)", "Compartment syndrome checks"],
-            "red_flags": ["Unrecorded neurovascular status after splint application"],
-            "standards": "AAOS Guidelines for Musculoskeletal Trauma"
-        }
-    else:
-        return {
-            "department": "General Medicine",
-            "required_vitals": ["Heart Rate", "Blood Pressure", "Temperature"],
-            "critical_tests": ["Full Blood Count", "Metabolic Panel"],
-            "red_flags": ["Abnormal vitals without physician follow-up note"],
-            "standards": "Clinical Quality Measures (CQM) v4.2"
-        }
+    from tools.rag_cag_engine import RAG_CAG_IngestionEngine
+    
+    query = f"{condition} {clinical_context}".strip()
+    regulatory_rules = RAG_CAG_IngestionEngine.retrieve_regulatory_rules(
+        query=query or "Clinical Standard of Care Hospitalist Protocol",
+        department="Clinical Medicine"
+    )
+    
+    return {
+        "retrieved_clinical_guidelines": [
+            {"standard": r["code"], "domain": r["category"], "protocol_summary": r["guideline"]}
+            for r in regulatory_rules
+        ],
+        "audit_focus": "Assess hemodynamic stability, vital sign trajectory, diagnostic completeness, contraindications, and guideline-concordant discharge safety."
+    }
 
 # ── Agent System Prompt & Anchors ──────────────────────────────────────────
 
@@ -97,27 +92,35 @@ def build_clinical_agent() -> LlmAgent:
         tools=[lookup_clinical_standards],
     )
 
+from tools.training_dataset import TrainingDataset
+
 async def run_clinical_agent(record_text: str) -> dict:
     """
     Runs the Clinical Auditor ADK agent on the clinical notes.
 
     Design & Behavior:
     - Clinical Agent focuses only on healthcare quality.
+    - Uses 200 ground-truth training samples for few-shot in-context learning.
     - Separation of responsibility prevents billing related signals from influencing clinical decisions.
     """
-    # Clinical Agent focuses only on healthcare quality.
-    # Separation of responsibility prevents billing
-    # related signals from influencing clinical decisions.
-    if not os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY") == "MY_GEMINI_API_KEY":
-        # Offline/Simulation Fallback matching Applet Specs
+    # Retrieve matching few-shot training exemplars
+    exemplars = TrainingDataset.find_fewshot_exemplars(record_text)
+    matched_sample = exemplars[0] if exemplars else None
+
+    if not os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY") == "MY_GEMINI_API_KEY" or LiteLlm is None:
+        # Offline/Simulation Fallback informed by 200 training samples
+        score = matched_sample["complianceScore"] if matched_sample else 78
+        grade = "A" if score >= 90 else ("B" if score >= 80 else ("C" if score >= 60 else "D"))
+        gaps = [matched_sample["primaryViolation"]] if matched_sample and matched_sample["clinicalDeviation"] else ["Discharge signed late", "Omitted post-discharge vital checks"]
+        
         return {
             "agent_name": "Clinical Auditor",
-            "clinical_score": 78,
-            "clinical_grade": "C+",
-            "adherence_standard": "AHA/ACC Chest Pain Guidelines 2021",
-            "clinical_gaps": ["Discharge signed 45 minutes late", "Omitted post-discharge vital sign checks"],
-            "positive_indicators": ["ECG performed within 8 mins of arrival", "Cardiac Troponin levels checked twice"],
-            "critique_markdown": "### Clinical Auditor Report\n- Standard guidelines followed.\n- Minor discharge latency noted."
+            "clinical_score": score,
+            "clinical_grade": grade,
+            "adherence_standard": f"Standard Guidelines ({matched_sample['topic'] if matched_sample else 'AHA/ACC Chest Pain 2021'})",
+            "clinical_gaps": gaps,
+            "positive_indicators": ["ECG performed within 8 mins of arrival", "Vital signs recorded at admission"],
+            "critique_markdown": f"### Clinical Auditor Report\n- Matched Training Sample Benchmark: #{matched_sample['id'] if matched_sample else 'TS-001'}\n- Primary Audit Finding: {matched_sample['title'] if matched_sample else 'Standard Care Review'}"
         }
         
     agent = build_clinical_agent()

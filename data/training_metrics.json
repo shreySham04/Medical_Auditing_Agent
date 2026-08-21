@@ -1,0 +1,50 @@
+{
+  "dataset": "Kaggle Medical Audit Dataset (10,000 Samples)",
+  "epochs": 5,
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.03157,
+      "val_loss": 0.00542,
+      "score_mae": 5.66,
+      "upcoding_accuracy": 100.0,
+      "verdict_accuracy": 100.0
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.00562,
+      "val_loss": 0.00474,
+      "score_mae": 5.57,
+      "upcoding_accuracy": 100.0,
+      "verdict_accuracy": 100.0
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.00492,
+      "val_loss": 0.00511,
+      "score_mae": 5.79,
+      "upcoding_accuracy": 100.0,
+      "verdict_accuracy": 100.0
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.00461,
+      "val_loss": 0.00451,
+      "score_mae": 5.19,
+      "upcoding_accuracy": 100.0,
+      "verdict_accuracy": 100.0
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.00446,
+      "val_loss": 0.0042,
+      "score_mae": 5.27,
+      "upcoding_accuracy": 100.0,
+      "verdict_accuracy": 100.0
+    }
+  ],
+  "final_train_loss": 0.00446,
+  "final_val_loss": 0.0042,
+  "final_verdict_accuracy": 100.0,
+  "final_upcoding_accuracy": 100.0
+}

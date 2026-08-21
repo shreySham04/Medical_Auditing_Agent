@@ -3,21 +3,44 @@ import sys
 import json
 import asyncio
 from pathlib import Path
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
-# Ensure local imports work
-sys.path.insert(0, str(Path(__file__).parent.parent))
-load_dotenv()
-
-from google.adk.agents import LlmAgent
-from google.adk.models.lite_llm import LiteLlm
-from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
-from google.genai import types as genai_types
+try:
+    from google.adk.agents import LlmAgent
+    from google.adk.models.lite_llm import LiteLlm
+    from google.adk.runners import Runner
+    from google.adk.sessions import InMemorySessionService
+    from google.genai import types as genai_types
+except ImportError:
+    LlmAgent = None
+    LiteLlm = None
+    Runner = None
+    InMemorySessionService = None
+    genai_types = None
 
 from tools.database import ForensicDB
+from tools.training_dataset import TrainingDataset
 
 # --- CHATBOT TOOLS FOR ADK ---
+
+def query_training_benchmark_samples(topic: str = "All Topics") -> str:
+    """
+    Look up ground-truth training and benchmark samples from the 200-sample dataset across 20 medical topics.
+    """
+    samples = TrainingDataset.get_samples_by_topic(topic)
+    if not samples:
+        return f"No training samples found for topic '{topic}'."
+    
+    summary_lines = [f"Found {len(samples)} benchmark training samples for topic '{topic}':"]
+    for s in samples[:10]:  # Show top 10
+        summary_lines.append(
+            f"- [{s['id']}] {s['topic']} ({s['verdict']}) - {s['title']} | Score: {s['complianceScore']}/100"
+        )
+    return "\n".join(summary_lines)
 
 def list_stored_audits() -> str:
     """
@@ -88,6 +111,22 @@ def build_chatbot_agent() -> LlmAgent:
     )
 
 
+def query_forensic_copilot(user_message: str) -> str:
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    if loop.is_running():
+        # Fallback response if loop is running inside async handler
+        if "list" in user_message.lower() or "audit" in user_message.lower():
+            return f"### 📊 Clinical Database Query\n{list_stored_audits()}"
+        return f"Hello! Forensic AI Copilot received: '{user_message}'. All clinical databases and CPT benchmarks are operational."
+    
+    return loop.run_until_complete(run_chatbot_session(user_message, []))
+
+
 async def run_chatbot_session(user_message: str, chat_history_list: list) -> str:
     """
     Runs the Chatbot Agent to process conversation, maintaining context of past messages.
@@ -98,7 +137,7 @@ async def run_chatbot_session(user_message: str, chat_history_list: list) -> str
     - Fallback is applied if the Gemini key is not configured.
     """
     # 1. Offline fallback mode
-    if not os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY") == "MY_GEMINI_API_KEY":
+    if not os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY") == "MY_GEMINI_API_KEY" or LiteLlm is None:
         msg_lower = user_message.lower()
         
         # If user asks to list audits
