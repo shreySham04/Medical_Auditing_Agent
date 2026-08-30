@@ -479,8 +479,7 @@ export default function App() {
     const recordContent = loadedRawRecordText || `Clinical case evaluation for ${effectivePatient}.`;
 
     try {
-      // Launch the backend audit promise - Text-First token optimization
-      const needsBase64Fallback = !recordContent || recordContent.length < 50;
+      // Launch the backend audit promise with full multimodal grounding
       const auditFetchPromise = fetch('/api/reaudit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -492,7 +491,7 @@ export default function App() {
           specialization: clinicianParams.specialization,
           department: clinicianParams.department,
           record_text: recordContent,
-          file_base64: needsBase64Fallback ? (loadedFileBase64 || undefined) : undefined,
+          file_base64: loadedFileBase64 || undefined,
           file_type: loadedFileType || undefined,
         }),
       });

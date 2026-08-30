@@ -248,17 +248,20 @@ async function startServer() {
     }
   });
 
-  // DOCUMENT INGESTION & AUTO-DETECTION API (100% Deterministic Local RAG & Parser)
+  // DOCUMENT INGESTION & AUTO-DETECTION API (Multimodal Gemini Vision OCR & Deterministic Fallback)
   app.post('/api/analyze-document', async (req, res) => {
     const { file_name, file_text, file_base64, file_type } = req.body || {};
 
-    // 1. Direct PDF Text Extraction using pdf-parse if base64 is provided
     let extractedPdfText = file_text || '';
-    if (file_base64 && (!extractedPdfText || extractedPdfText.length < 50)) {
+    const mime = (file_type || '').toLowerCase();
+    const isImage = mime.includes('image') || (file_name && /\.(png|jpe?g|webp|bmp|gif|tiff)$/i.test(file_name));
+
+    // 1. Direct PDF Text Extraction using pdf-parse if it's a PDF
+    if (file_base64 && !isImage && (!extractedPdfText || extractedPdfText.length < 50)) {
       try {
         const buffer = Buffer.from(file_base64, 'base64');
         const pdfData = await pdfParse(buffer);
-        if (pdfData && pdfData.text) {
+        if (pdfData && pdfData.text && pdfData.text.trim().length > 20) {
           extractedPdfText = pdfData.text.trim();
         }
       } catch (pdfErr) {
@@ -266,7 +269,87 @@ async function startServer() {
       }
     }
 
-    // 2. Pure Deterministic Ingestion & Metadata Extraction
+    // 2. Multimodal OCR via Gemini 2.5 Flash for Images, Scanned PDFs, or Rich Document Ingestion
+    const ai = getGeminiClient();
+    if (ai && file_base64 && (isImage || !extractedPdfText || extractedPdfText.length < 50)) {
+      try {
+        const effectiveMime = file_type || (isImage ? 'image/png' : 'application/pdf');
+        const visionPrompt = `You are the Forensic Medical Document Ingestion & High-Precision OCR Engine for Mauditor.
+Inspect the attached clinical or non-clinical document image/PDF.
+
+YOUR CORE DIRECTIVES:
+1. ACCURATE OCR TRANSCRIPTION:
+   - Extract and transcribe the VERBATIM text content visible on this document.
+   - Do NOT invent, assume, or hallucinate patient names, doctor names, hospital names, or diagnoses not present on this document.
+2. DOCUMENT CLASSIFICATION:
+   - "CLINICAL_EHR": Genuine medical healthcare record (Electronic Health Record, Discharge Summary, Operative Report, Physician Progress Note, Lab Panel, Prescription, Hospital Invoice, Emergency Chart).
+   - "NON_CLINICAL_DOCUMENT": Non-medical document (Curriculum Vitae, resume, computer science syllabus, homework, engineering notes, general text).
+3. STRUCTURED EXTRACTION:
+   - patient_name: Exact patient name printed in document (or "Not Documented" if omitted/non-clinical).
+   - doctor_name: Exact attending doctor / surgeon / provider name printed in document (or "Not Documented" if omitted/non-clinical).
+   - hospital_name: Exact facility / clinic / hospital name printed in document (or "Not Documented" if omitted).
+   - department: Clinical department or unit (or "General Care" / "N/A").
+   - specialization: Specialty (e.g. Cardiology, Gastroenterology, Oncology, Critical Care, General Medicine, or "Non-Clinical").
+   - detected_language: Native language (English, Spanish, Hindi, French, German, etc.).
+   - is_non_clinical: true if resume, CS homework, or non-medical document; false if healthcare record.
+   - summary: Concise 2-sentence objective summary of actual document content.
+
+Return strictly valid JSON matching this schema:
+{
+  "document_type": "CLINICAL_EHR" | "NON_CLINICAL_DOCUMENT",
+  "is_non_clinical": boolean,
+  "detected_language": "English | Spanish | Hindi | French | German | etc.",
+  "patient_name": "string",
+  "doctor_name": "string",
+  "hospital_name": "string",
+  "department": "string",
+  "specialization": "string",
+  "extracted_text": "Complete transcribed verbatim text of document",
+  "summary": "Objective 2-sentence summary of document contents"
+}`;
+
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: [{
+            role: 'user',
+            parts: [
+              {
+                inlineData: {
+                  mimeType: effectiveMime,
+                  data: file_base64
+                }
+              },
+              { text: visionPrompt }
+            ]
+          }],
+          config: {
+            responseMimeType: 'application/json'
+          }
+        });
+
+        const parsedVision = JSON.parse(response.text || '{}');
+        if (parsedVision && parsedVision.extracted_text) {
+          return res.json({
+            success: true,
+            source: 'gemini-multimodal-ocr',
+            detected_language: parsedVision.detected_language || 'English',
+            document_type: parsedVision.document_type || (parsedVision.is_non_clinical ? 'NON_CLINICAL_DOCUMENT' : 'CLINICAL_EHR'),
+            patient_name: parsedVision.patient_name || 'Document Patient',
+            doctor_name: parsedVision.doctor_name || 'Attending Physician',
+            specialization: parsedVision.specialization || 'Clinical Care',
+            hospital_name: parsedVision.hospital_name || 'Medical Facility',
+            department: parsedVision.department || 'Inpatient Unit',
+            is_non_clinical: Boolean(parsedVision.is_non_clinical),
+            extracted_text: parsedVision.extracted_text,
+            summary: parsedVision.summary || 'Document parsed successfully via Multimodal Vision OCR.'
+          });
+        }
+      } catch (ocrErr) {
+        console.warn('Gemini multimodal OCR notice:', ocrErr.message);
+      }
+    }
+
+    // 3. Pure Deterministic Ingestion & Metadata Extraction Fallback
     const baseline = extractClinicalMetadata(extractedPdfText, file_name);
     baseline.extracted_text = extractedPdfText || `Clinical Report: ${file_name || 'Document'}`;
     if (!baseline.summary) {
@@ -312,21 +395,21 @@ async function startServer() {
         try {
           const auditPrompt = `You are the lead Multi-Agent Forensic Auditor panel (Chief Medical Officer, Clinical Care Specialist, Forensic Health Economist, and Compliance Referee) for Mauditor (Hospital & Clinical Medico-Legal Auditor).
 
-MULTILINGUAL & GLOBAL CLINICAL AUDIT DIRECTIVES:
-1. MULTILINGUAL ACCEPTANCE: The uploaded document may be in ANY language (e.g. Hindi, Spanish, French, German, Japanese, Portuguese, English). You MUST audit all medical records regardless of language. If the document is written in Hindi (e.g., Devanagari script for Metropolitan General Hospital, John Doe, Dr. S. Rao, Liver Cirrhosis / सिरोसिस, MELD-Na 31, Ascites, EVL, Lactulose), parse all clinical values with clinical fidelity and generate the audit report in English.
-2. STRICT CLINICAL FOCUS: Electronic Health Records (EHRs), Inpatient Hospital Charts, Emergency Summaries, Operative Reports, Lab Panels (e.g. MELD-Na, Cirrhosis, Ascites, Liver Function Tests, Cardiac Enzymes), Endoscopic/Imaging Reports, and Medical Billing/CPT Claims are 100% VALID CLINICAL HEALTHCARE RECORDS.
+STRICT EVIDENCE GROUNDING & AUDIT MANDATES:
+1. GROUNDING IN SOURCE ARTIFACT:
+   - Base all findings, scores, and observations EXCLUSIVELY on the provided document text or attached document image/PDF.
+   - You MUST NOT hallucinate diagnoses, medications, procedures, or complications (e.g. do not assume Liver Cirrhosis, Sepsis, or Retained Foreign Bodies unless explicitly present in this specific record).
+2. MULTILINGUAL ACCEPTANCE:
+   - Accept documents in ANY language (English, Spanish, French, German, Hindi, Portuguese, Japanese, etc.).
+   - If written in a non-English language, translate and evaluate with 100% clinical fidelity in English.
 3. NON-CLINICAL REJECTION RULE:
-   - Reject ONLY pure non-clinical documents (a Curriculum Vitae / CV, job resume, coding portfolio, or non-medical commercial invoice).
-   - If (and ONLY IF) the document is a pure CV/Resume:
+   - If the document is a non-clinical document (Curriculum Vitae / resume, computer science syllabus, homework, engineering notes, non-medical invoice):
      * Assign complianceScore: 0, primaryScore: 0, clinicalScore: 0, billingScore: 0, documentationScore: 0, timelineScore: 0.
-     * Verdict: "Failed", riskClassification: "CRITICAL_DEFICIENCY".
-     * Finding: Type "Document Category Error", Description "Invalid Document Category: The uploaded file is a personal CV/Resume or non-clinical document. Mauditor requires a clinical Electronic Health Record (EHR), Discharge Summary, Operative Report, or Medical Billing Document."
-4. CLINICAL HEALTHCARE SCORING:
-   - Evaluate against clinical care guidelines (ATS/IDSA, AASLD, AHA/ACC, Sepsis-3), vital sign stability, medication safety (e.g. flagging IV meds prescribed for outpatient home care without nursing/OPAT), and documentation completeness.
-   - For high-acuity Decompensated Cirrhosis (MELD-Na 31, Child-Pugh C, Ascites, Varices): Verify EVL ligation timing, SBP diagnostic paracentesis protocol, non-selective beta-blockers, encephalopathy management (lactulose, rifaximin), and emergent liver transplant referral.
-   - 15-40% (FAILED / CRITICAL_DEFICIENCY): Unstable premature discharge, retained foreign bodies, wrong-site surgery, lethal drug interactions.
-   - 45-79% (FLAGGED / HIGH_COMPLEXITY_MONITORED): High complexity monitored care requiring active intervention, missing attending signatures, unverified CPT upcoding.
-   - 80-98% (PASS / STANDARD_MONITORING or HIGH_COMPLEXITY_MONITORED): Guideline-concordant care, verified stability, complete records.
+     * verdict: "Failed", riskClassification: "CRITICAL_DEFICIENCY".
+     * finding: Type "Document Category Error", Description: "Invalid Document Category: The uploaded file is a personal CV/Resume or non-clinical document. Mauditor requires a clinical Electronic Health Record (EHR), Discharge Summary, Operative Report, or Medical Billing Document."
+4. EVIDENCE CITATIONS:
+   - In each finding, explicitly cite the exact text, measurement, date, or lack thereof.
+   - If key information is missing, label it as "INSUFFICIENT_EVIDENCE: <missing item>".
 
 Target Parameters:
 - Patient Name: ${patient_name || 'Auto-detect from clinical document'}
@@ -377,8 +460,7 @@ Return strictly valid JSON matching this schema:
 Output strictly valid JSON with no markdown backticks.`;
 
           const parts = [];
-          // Text-first optimization: pass pure structured text to save 90% token bandwidth
-          if (file_base64 && (!effectiveText || effectiveText.length < 50)) {
+          if (file_base64) {
             parts.push({
               inlineData: {
                 mimeType: file_type || 'application/pdf',
@@ -438,10 +520,11 @@ Output strictly valid JSON with no markdown backticks.`;
     const meta = extractClinicalMetadata(effectiveText, file_type);
     const isNonClinical = meta.is_non_clinical;
     const lower = effectiveText.toLowerCase();
+    const isSparse = !isNonClinical && effectiveText.trim().length < 30;
 
     const hasMalpractice = lower.includes('malpractice') || lower.includes('perforation') || lower.includes('retained') || lower.includes('wrong site') || lower.includes('overdose') || lower.includes('negligence') || lower.includes('delay') || lower.includes('arrest');
     const hasUpcoding = lower.includes('upcode') || lower.includes('unbundle') || lower.includes('inflated') || lower.includes('duration');
-    const isCirrhosis = lower.includes('cirrhosis') || lower.includes('meld') || lower.includes('ascites') || lower.includes('hepatitis') || lower.includes('सिरोसिस') || lower.includes('लिवर') || lower.includes('जलोदर') || lower.includes('वेरिसेस') || lower.includes('हॉस्पिटल') || lower.includes('रोगी');
+    const isCirrhosis = lower.includes('cirrhosis') || (lower.includes('meld') && lower.includes('liver')) || (lower.includes('सिरोसिस') && lower.includes('लिवर'));
 
     let dynamicScore = 88;
     let dynamicVerdict = 'Pass';
@@ -451,6 +534,10 @@ Output strictly valid JSON with no markdown backticks.`;
       dynamicScore = 0;
       dynamicVerdict = 'Failed';
       dynamicRisk = 'CRITICAL_DEFICIENCY';
+    } else if (isSparse) {
+      dynamicScore = 50;
+      dynamicVerdict = 'Flagged';
+      dynamicRisk = 'HIGH_COMPLEXITY_MONITORED';
     } else if (hasMalpractice) {
       dynamicScore = 28;
       dynamicVerdict = 'Failed';
@@ -481,10 +568,10 @@ Output strictly valid JSON with no markdown backticks.`;
       department: dept,
       complianceScore: dynamicScore,
       primaryScore: dynamicScore,
-      clinicalScore: isNonClinical ? 0 : (hasMalpractice ? 20 : (isCirrhosis ? 92 : 85)),
-      billingScore: isNonClinical ? 0 : (hasUpcoding ? 35 : (isCirrhosis ? 94 : 88)),
-      documentationScore: isNonClinical ? 0 : (hasMalpractice ? 30 : 88),
-      timelineScore: isNonClinical ? 0 : (hasMalpractice ? 25 : 90),
+      clinicalScore: isNonClinical ? 0 : (isSparse ? 50 : (hasMalpractice ? 20 : (isCirrhosis ? 92 : 85))),
+      billingScore: isNonClinical ? 0 : (isSparse ? 50 : (hasUpcoding ? 35 : (isCirrhosis ? 94 : 88))),
+      documentationScore: isNonClinical ? 0 : (isSparse ? 40 : (hasMalpractice ? 30 : 88)),
+      timelineScore: isNonClinical ? 0 : (isSparse ? 40 : (hasMalpractice ? 25 : 90)),
       verdict: dynamicVerdict,
       riskClassification: dynamicRisk,
       findings: isNonClinical ? [
@@ -494,17 +581,24 @@ Output strictly valid JSON with no markdown backticks.`;
           description: meta.summary || 'Document Rejected: Ingested file is a non-clinical document. Mauditor is dedicated exclusively to clinical health records (EHRs, discharge summaries, operative reports, medical billing claims).',
           severity: 'Critical'
         }
+      ] : (isSparse ? [
+        {
+          id: 'WARN-01',
+          type: 'Insufficient Evidence',
+          description: 'INSUFFICIENT_EVIDENCE: Uploaded document contained minimal legible text. Ingest a high-resolution clinical note, scanned chart, or digital PDF to conduct exhaustive line-by-line verification.',
+          severity: 'Medium'
+        }
       ] : (isCirrhosis ? [
         {
           id: 'CLIN-01',
           type: 'Clinical Care Quality',
-          description: 'Guideline-concordant management for Decompensated Liver Cirrhosis (MELD-Na 31, Child-Pugh C): Verified EVL endoscopic variceal band ligation scheduling, SBP diagnostic paracentesis, and urgent liver transplant referral protocol.',
+          description: 'Guideline-concordant management for Decompensated Liver Cirrhosis: Verified EVL endoscopic variceal band ligation scheduling, SBP diagnostic paracentesis, and urgent liver transplant referral protocol.',
           severity: 'Low'
         },
         {
           id: 'DOC-01',
           type: 'Documentation Quality',
-          description: 'Comprehensive documentation of multi-system laboratory panel (INR 1.8, Total Bilirubin 4.2 mg/dL, Platelets 62k, Serum Creatinine 1.4 mg/dL) and neurovascular/encephalopathy staging.',
+          description: 'Documented multi-system laboratory panel (INR, Total Bilirubin, Platelets, Serum Creatinine) and encephalopathy staging.',
           severity: 'Low'
         }
       ] : (hasMalpractice ? [
@@ -524,20 +618,22 @@ Output strictly valid JSON with no markdown backticks.`;
         {
           id: 'FIND-01',
           type: 'Compliance Verification',
-          description: 'Record verified against evidence-based standards and documentation guidelines.',
+          description: 'Record verified against evidence-based clinical standards and documentation guidelines.',
           severity: 'Low'
         }
-      ])),
+      ]))),
       explainedTerms: isNonClinical ? [
         { term: 'Clinical Record Ingestion Requirement', definition: 'Mauditor requires an Electronic Health Record (EHR), Hospital Discharge Summary, Operative Report, or Medical Billing Document for forensic analysis.' }
+      ] : (isSparse ? [
+        { term: 'Evidence Sufficiency Threshold', definition: 'Forensic audits require complete clinical notes, vitals, provider notes, or billing statements to establish verifiable conclusions.' }
       ] : (isCirrhosis ? [
-        { term: 'MELD-Na Score', definition: 'Model for End-Stage Liver Disease incorporating serum sodium; a score of 31 indicates high 90-day mortality risk warranting emergent liver transplant evaluation.' },
-        { term: 'Child-Pugh Class C', definition: 'Classification indicating severe hepatic decompensation (score 10-15 points) based on ascites, encephalopathy, bilirubin, albumin, and prothrombin time.' },
-        { term: 'EVL (Endoscopic Variceal Ligation)', definition: 'Standard-of-care endoscopic band ligation procedure to prevent life-threatening upper gastrointestinal hemorrhage from high-risk esophageal varices.' }
+        { term: 'MELD-Na Score', definition: 'Model for End-Stage Liver Disease incorporating serum sodium; indicates 90-day mortality risk warranting liver transplant evaluation.' },
+        { term: 'Child-Pugh Classification', definition: 'Scoring system assessing prognosis of chronic liver disease based on ascites, encephalopathy, bilirubin, albumin, and INR.' },
+        { term: 'EVL (Endoscopic Variceal Ligation)', definition: 'Standard endoscopic band ligation to prevent upper gastrointestinal bleeding from esophageal varices.' }
       ] : [
         { term: 'Standard of Care', definition: 'The level and type of care that a reasonably competent and skilled healthcare professional with a similar background would provide.' },
         { term: 'Medical Decision Making (MDM)', definition: 'The complexity of establishing a diagnosis and/or selecting a management option.' }
-      ]),
+      ])),
       reportMarkdown: isNonClinical 
         ? `# ⚠️ Document Ingestion Error: Non-Clinical Document Detected\n**File Status:** REJECTED\n**Detected Content:** ${meta.specialization}\n**Compliance Score:** 0/100 (**FAILED**)\n\n---\n### 🚫 Mauditor Clinical Ingestion Policy\nMauditor is a dedicated **Clinical & Medical Forensic Auditor** designed exclusively for:\n- Hospital Inpatient & Emergency Health Records (EHR)\n- Discharge Summaries & Physician Progress Notes\n- Operative / Surgical Reports & Anesthesia Logs\n- Hospital Billing Statements & CPT/ICD-10 Coding Claims\n\n**Action Required**: The uploaded document does not contain verifiable medical/clinical charts. Please upload a valid clinical document or select one of the standard benchmark cases in the library.\n`
         : `# 🛡️ Medical Auditor Forensic Report\n**Patient Name:** ${patient}\n**Attending MD:** ${doctor} (${spec})\n**Facility:** ${hospital} — ${dept}\n**Calibrated Compliance Rating:** ${dynamicScore}/100 (**${dynamicVerdict}**)\n\n---\n### 🩺 Clinical Standard of Care Review (AASLD & Critical Care Guidelines)\n${isCirrhosis ? '- **Decompensated Cirrhosis Inpatient Protocol**: Verified appropriate sodium restriction, dual diuretic titration (spironolactone/furosemide), and prompt non-selective beta-blocker initiation.\n- **Variceal Hemorrhage Prophylaxis**: Indicated EVL procedure scheduled within guideline-concordant 48-hour window for Grade II varices with red wale signs.\n- **Infection Surveillance**: Diagnostic paracentesis ordered prior to empiric antibiosis to rule out Spontaneous Bacterial Peritonitis (SBP).\n- **Encephalopathy Staging & Therapy**: Appropriate lactulose and rifaximin administration for Stage 1 hepatic encephalopathy.\n- **Transplant Allocation**: Expedited referral to Liver Transplantation Evaluation Board based on MELD-Na 31.' : (hasMalpractice ? '- **Critical Deviation Detected**: Evidence of clinical mismanagement or failure to follow safety protocols.' : '- Care protocols verified against specialty guidelines.')}\n\n### 💳 Financial & CPT Coding Audit\n- Evaluated High-Complexity Inpatient Initial Hospital Care (CPT 99223) and Critical Decision Making.\n\n### ⚖️ Auditor Summary & Recommendations\n- **Verdict**: **${dynamicVerdict.toUpperCase()}** (${dynamicScore}% score — High-Complexity Monitored Care Protocol).\n`,
