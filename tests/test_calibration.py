@@ -1,9 +1,9 @@
 """
-Unit tests for human-feedback calibration, ECE, and Brier score.
+Unit tests for expert-rule calibration, ECE, and Brier score.
 """
 
 import unittest
-from core.calibration import HumanFeedbackCalibrator
+from core.calibration import ExpertRuleCalibrator
 
 
 class TestCalibration(unittest.TestCase):
@@ -17,7 +17,7 @@ class TestCalibration(unittest.TestCase):
                 "severity": "Medium"
             }
         ]
-        result = HumanFeedbackCalibrator.calibrate_scores(
+        result = ExpertRuleCalibrator.calibrate_scores(
             clinical_score=85,
             billing_score=90,
             doc_score=90,
@@ -33,7 +33,7 @@ class TestCalibration(unittest.TestCase):
     def test_expected_calibration_error(self):
         preds = [0.1, 0.2, 0.8, 0.9, 0.85]
         labels = [0, 0, 1, 1, 1]
-        ece = HumanFeedbackCalibrator.compute_expected_calibration_error(preds, labels)
+        ece = ExpertRuleCalibrator.compute_expected_calibration_error(preds, labels)
         self.assertIsInstance(ece, float)
         self.assertGreaterEqual(ece, 0.0)
         self.assertLessEqual(ece, 1.0)
@@ -41,7 +41,7 @@ class TestCalibration(unittest.TestCase):
     def test_brier_score(self):
         preds = [0.1, 0.2, 0.8, 0.9]
         labels = [0, 0, 1, 1]
-        brier = HumanFeedbackCalibrator.compute_brier_score(preds, labels)
+        brier = ExpertRuleCalibrator.compute_brier_score(preds, labels)
         self.assertIsInstance(brier, float)
         self.assertLess(brier, 0.1)
 

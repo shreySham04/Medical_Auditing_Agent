@@ -44,13 +44,18 @@ class EvidenceSpan:
 
 @dataclass
 class StructuredClinicalEvidence:
-    patient_name: str = ""
-    doctor_name: str = ""
-    hospital_name: str = ""
-    department: str = ""
-    specialty: str = ""
+    patient_name: str = "Unknown / Not documented"
+    doctor_name: str = "Unknown / Not documented"
+    hospital_name: str = "Unknown / Not documented"
+    department: str = "Unknown / Not documented"
+    specialty: str = "Unknown / Not documented"
     chief_complaint: str = ""
     vitals_recorded: Dict[str, str] = field(default_factory=dict)
+    lab_values: Dict[str, Any] = field(default_factory=dict)
+    timing_milestones: Dict[str, Any] = field(default_factory=dict)
+    procedural_predicates: Dict[str, Any] = field(default_factory=dict)
+    medication_predicates: Dict[str, Any] = field(default_factory=dict)
+    coding_predicates: Dict[str, Any] = field(default_factory=dict)
     procedures_identified: List[str] = field(default_factory=list)
     medications_ordered: List[str] = field(default_factory=list)
     cpt_codes_identified: List[str] = field(default_factory=list)

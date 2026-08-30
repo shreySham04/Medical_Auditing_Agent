@@ -29,9 +29,9 @@ export const ForensicInvestigator: React.FC<ForensicInvestigatorProps> = ({
   isLoading
 }) => {
   const getCaseId = (a?: AuditRecord) => a?.case_id || a?.id || 'CASE-101';
-  const getPatientName = (a?: AuditRecord) => a?.patient_name || a?.patientName || 'Patient Record';
-  const getDoctorName = (a?: AuditRecord) => a?.doctor_name || a?.doctorName || 'Dr. Elena Vance';
-  const getHospital = (a?: AuditRecord) => a?.hospital || a?.hospitalName || 'St. Jude General Hospital';
+  const getPatientName = (a?: AuditRecord) => a?.patient_name || a?.patientName || 'Unknown / Not documented';
+  const getDoctorName = (a?: AuditRecord) => a?.doctor_name || a?.doctorName || 'Unknown / Not documented';
+  const getHospital = (a?: AuditRecord) => a?.hospital || a?.hospitalName || 'Unknown / Not documented';
   const getAuditDate = (a?: AuditRecord) => a?.audit_date || (a?.timestamp ? a.timestamp.split('T')[0] : '2026-08-01');
   const getScore = (a?: AuditRecord) => {
     if (typeof a?.compliance_rating === 'number') return a.compliance_rating;

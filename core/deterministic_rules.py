@@ -19,8 +19,13 @@ class DeterministicRuleValidator:
         lower = raw.lower()
         results: List[DeterministicRuleCheck] = []
 
+        coding = evidence.coding_predicates or {}
+        procedural = evidence.procedural_predicates or {}
+        timing = evidence.timing_milestones or {}
+        labs = evidence.lab_values or {}
+
         # RULE 1: CPT 99291 Critical Care Time Requirement (≥30 minutes face-to-face)
-        if "99291" in raw or "critical care" in lower:
+        if coding.get("cpt_99291_critical_care") or "99291" in raw or "critical care" in lower:
             physician_time = evidence.physician_time_minutes
             if physician_time is not None and physician_time < 30:
                 results.append(DeterministicRuleCheck(
@@ -50,13 +55,12 @@ class DeterministicRuleValidator:
                 ))
 
         # RULE 2: Sepsis-3 3-Hour Bundle Sequence (Blood cultures before empiric antibiotics)
-        if "sepsis" in lower or ("fever" in lower and "antibiotic" in lower):
-            has_abx = any(m in lower for m in ["ceftriaxone", "vancomycin", "cefepime", "zosyn", "piperacillin", "antibiotic"])
-            bcx_omitted = any(term in lower for term in ["no blood culture", "blood cultures omitted", "blood cultures were omitted", "without prior blood culture", "cultures were not drawn", "no cultures", "omitted prior to"])
-            has_bcx_drawn = ("blood culture" in lower or "cultures drawn" in lower) and not bcx_omitted
+        has_abx = any(m in ["Ceftriaxone", "Vancomycin", "Cefepime", "Zosyn", "Piperacillin", "Azithromycin"] for m in evidence.medications_ordered) or "antibiotic" in lower
+        if "sepsis" in lower or ("fever" in lower and has_abx):
+            has_bcx_drawn = procedural.get("has_blood_cultures_drawn", False)
             
             # Check if antibiotics were given with missing/omitted blood cultures
-            if has_abx and (bcx_omitted or not has_bcx_drawn) and ("pneumonia" in lower or "sepsis" in lower or "bacteremia" in lower or "fever" in lower):
+            if has_abx and not has_bcx_drawn and ("pneumonia" in lower or "sepsis" in lower or "bacteremia" in lower or "fever" in lower):
                 results.append(DeterministicRuleCheck(
                     rule_id="RULE-DET-02",
                     rule_name="Sepsis-3 Bundle Sequence Infraction",
@@ -71,8 +75,8 @@ class DeterministicRuleValidator:
                 ))
 
         # RULE 3: NCCI Modifier -59 / -X{EPSU} Procedural Unbundling on Same Anatomical Site
-        if "-59" in raw or "modifier 59" in lower or "unbundle" in lower:
-            is_same_site = "same incision" in lower or "same knee" in lower or "same vessel" in lower or "identical compartment" in lower
+        if procedural.get("has_modifier_59") or "-59" in raw or "modifier 59" in lower:
+            is_same_site = procedural.get("is_same_incision", False) or "same incision" in lower or "same knee" in lower
             if is_same_site:
                 results.append(DeterministicRuleCheck(
                     rule_id="RULE-DET-03",
@@ -88,31 +92,30 @@ class DeterministicRuleValidator:
                 ))
 
         # RULE 4: ACS 10-Minute ECG Acquisition Protocol
-        if "stemi" in lower or "chest pain" in lower or "cardiac arrest" in lower:
-            if "ecg" in lower or "ekg" in lower:
-                ecg_timing_match = any(term in lower for term in ["within 6 min", "within 5 min", "within 8 min", "within 10 min", "door-to-ecg: 7", "door-to-ecg: 6"])
-                delayed_ecg = any(term in lower for term in ["ecg delayed", "ecg at 45 min", "ecg at 60 min", "ecg after 30 min", "no ecg obtained"])
-                if delayed_ecg:
+        if "stemi" in lower or "chest pain" in lower or "cardiac arrest" in lower or "troponin" in labs:
+            door_to_ecg = timing.get("door_to_ecg_minutes")
+            if door_to_ecg is not None:
+                if door_to_ecg > 10:
                     results.append(DeterministicRuleCheck(
                         rule_id="RULE-DET-04",
                         rule_name="Delayed Door-to-ECG Acquisition Beyond 10-Minute Window",
                         authority="AHA/ACC 2026 Guidelines for Management of Acute Coronary Syndromes §3.2.1",
                         citation_code="AHA-ACC-2026-ACS-3.2",
                         expected_constraint="Initial 12-lead ECG must be acquired and interpreted within 10 minutes of patient arrival.",
-                        observed_fact="Door-to-ECG time exceeded statutory 10-minute maximum clinical standard.",
+                        observed_fact=f"Door-to-ECG time of {door_to_ecg} min exceeded statutory 10-minute maximum clinical standard.",
                         status="VIOLATED",
                         severity="Critical",
                         penalty_score=40,
                         reproducible_rule_logic="ASSERT door_to_ecg_minutes <= 10 WHEN chief_complaint == 'Chest Pain'"
                     ))
-                elif ecg_timing_match:
+                else:
                     results.append(DeterministicRuleCheck(
                         rule_id="RULE-DET-04",
                         rule_name="Door-to-ECG 10-Minute Standard Verified",
                         authority="AHA/ACC 2026 Guidelines for Management of Acute Coronary Syndromes §3.2.1",
                         citation_code="AHA-ACC-2026-ACS-3.2",
                         expected_constraint="Initial 12-lead ECG within 10 minutes of presentation.",
-                        observed_fact="ECG acquisition completed within recommended clinical triage window.",
+                        observed_fact=f"ECG acquisition completed within {door_to_ecg} minutes (concordant with clinical triage standard).",
                         status="PASSED",
                         severity="Low",
                         penalty_score=0,
@@ -120,7 +123,9 @@ class DeterministicRuleValidator:
                     ))
 
         # RULE 5: Informed Consent & Surgical Site Verification
-        if ("surgery" in lower or "operative" in lower or "resection" in lower or "arthroscopy" in lower) and not "consent" in lower:
+        is_surgical = bool(evidence.procedures_identified) or any(t in lower for t in ["surgery", "operative", "resection", "arthroscopy"])
+        has_consent = procedural.get("has_informed_consent", False)
+        if is_surgical and not has_consent:
             results.append(DeterministicRuleCheck(
                 rule_id="RULE-DET-05",
                 rule_name="Missing Pre-Operative Informed Consent Documentation",
@@ -134,7 +139,24 @@ class DeterministicRuleValidator:
                 reproducible_rule_logic="ASSERT informed_consent_documented == TRUE WHEN procedure_type == 'Surgical'"
             ))
 
-        # RULE 6: Truncated Chart Minimum Completeness Check
+        # RULE 6: Diagnostic Radiographic Confirmation for Inpatient Pneumonia
+        if "pneumonia" in lower and ("admitted" in lower or "inpatient" in lower):
+            has_imaging = procedural.get("has_radiograph_confirmed", False)
+            if not has_imaging and ("no chest x-ray" in lower or "without radiographic" in lower or "no imaging" in lower):
+                results.append(DeterministicRuleCheck(
+                    rule_id="RULE-DET-07",
+                    rule_name="Unconfirmed Pneumonia Diagnosis Without Radiography",
+                    authority="ATS/IDSA Community-Acquired Pneumonia Guidelines §3.1 & CMS QM #067",
+                    citation_code="ATS-IDSA-CAP-3.1",
+                    expected_constraint="Mandatory chest radiograph or CT imaging to confirm parenchymal infiltrate prior to definitive inpatient diagnosis.",
+                    observed_fact="Inpatient admission and broad-spectrum antimicrobial management for pneumonia without documented radiographic confirmation.",
+                    status="VIOLATED",
+                    severity="High",
+                    penalty_score=30,
+                    reproducible_rule_logic="ASSERT chest_radiography_documented == TRUE WHEN diagnosis == 'Pneumonia'"
+                ))
+
+        # RULE 7: Truncated Chart Minimum Completeness Check
         if evidence.is_truncated_or_incomplete:
             results.append(DeterministicRuleCheck(
                 rule_id="RULE-DET-06",

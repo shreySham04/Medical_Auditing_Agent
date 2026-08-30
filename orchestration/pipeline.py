@@ -33,7 +33,7 @@ from core.schemas import (
     StructuredClinicalEvidence
 )
 from core.config import REGULATORY_KB_VERSION, PROJECT_FRAMEWORK_TIER
-from core.calibration import HumanFeedbackCalibrator
+from core.calibration import ExpertRuleCalibrator
 from core.evidence_extractor import StructuredEvidenceExtractor
 from core.deterministic_rules import DeterministicRuleValidator
 from core.disagreement_detector import CrossAgentDisagreementDetector
@@ -73,10 +73,10 @@ class MedicalAuditOrchestrator:
 
         # Ingestion metadata
         doc_parsed = await run_document_agent(clean_text)
-        patient_name = structured_evidence.patient_name or doc_parsed.get("patient_name") or "Marcus Vance"
-        doctor_name = structured_evidence.doctor_name or doc_parsed.get("doctor_name") or "Dr. Elena Vance, MD"
-        hospital_name = structured_evidence.hospital_name or doc_parsed.get("hospital_name") or "Memorial General Hospital"
-        department = department_hint or doc_parsed.get("department") or "General Medicine"
+        patient_name = structured_evidence.patient_name if structured_evidence.patient_name != "Unknown / Not documented" else (doc_parsed.get("patient_name") or "Unknown / Not documented")
+        doctor_name = structured_evidence.doctor_name if structured_evidence.doctor_name != "Unknown / Not documented" else (doc_parsed.get("doctor_name") or "Unknown / Not documented")
+        hospital_name = structured_evidence.hospital_name if structured_evidence.hospital_name != "Unknown / Not documented" else (doc_parsed.get("hospital_name") or "Unknown / Not documented")
+        department = department_hint if department_hint != "Unknown / Not documented" else (doc_parsed.get("department") or "Unknown / Not documented")
 
         # If chart is truncated or lacks minimum clinical evidence, produce explicit INSUFFICIENT_EVIDENCE verdict
         if is_insufficient:
@@ -269,8 +269,8 @@ class MedicalAuditOrchestrator:
             department=department
         )
 
-        # STEP 10: Human-Feedback Calibration & Score Synthesis
-        calibration_result = HumanFeedbackCalibrator.calibrate_scores(
+        # STEP 10: Expert-Rule Calibration & Score Synthesis
+        calibration_result = ExpertRuleCalibrator.calibrate_scores(
             clinical_score=c_score,
             billing_score=b_score,
             doc_score=d_score,

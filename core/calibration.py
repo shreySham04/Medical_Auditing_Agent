@@ -1,6 +1,6 @@
 """
-Human-Feedback Calibration Engine.
-Provides decision-boundary calibration, false-positive reduction via expert clinician feedback,
+Expert-Rule Calibration Engine.
+Provides decision-boundary calibration, false-positive reduction via expert guideline rules,
 and empirical Expected Calibration Error (ECE) and Brier Score computation.
 """
 
@@ -9,12 +9,12 @@ import math
 from core.config import WEIGHT_CLINICAL, WEIGHT_BILLING, WEIGHT_DOCUMENTATION, WEIGHT_TIMELINE
 
 
-# Expert human-feedback exemplars derived from clinical consensus reviews
-HUMAN_FEEDBACK_EXEMPLARS = [
+# Expert clinical rule calibration exemplars derived from clinical guideline consensus
+EXPERT_RULE_CALIBRATION_EXEMPLARS = [
     {
-        "id": "HFC-EX-01",
+        "id": "ERC-EX-01",
         "department": "Emergency Medicine",
-        "clinician_reviewer": "Dr. Sarah Jenkins, MD, FACEP",
+        "guideline_source": "ACEP Clinical Policy & STEMI Triage Protocols",
         "pattern": "Omission of detailed 12-lead ECG lead description during acute STEMI triage",
         "standard_deduction": -15,
         "calibrated_deduction": 0,
@@ -22,9 +22,9 @@ HUMAN_FEEDBACK_EXEMPLARS = [
         "calibration_action": "Suppress False-Positive alert"
     },
     {
-        "id": "HFC-EX-02",
+        "id": "ERC-EX-02",
         "department": "Orthopedic Surgery",
-        "clinician_reviewer": "Dr. Arthur Jenkins, MD, FAAOS",
+        "guideline_source": "AAOS Clinical Practice Guidelines & CMS NCCI Manual",
         "pattern": "Separate line charge for acute closed fracture reduction and emergency stabilization splinting",
         "standard_deduction": -25,
         "calibrated_deduction": 0,
@@ -32,9 +32,9 @@ HUMAN_FEEDBACK_EXEMPLARS = [
         "calibration_action": "Apply NCCI Emergency Exception"
     },
     {
-        "id": "HFC-EX-03",
+        "id": "ERC-EX-03",
         "department": "Cardiology",
-        "clinician_reviewer": "Dr. Marcus Thorne, MD, FACC",
+        "guideline_source": "AHA/ACC High-Sensitivity Troponin Protocols",
         "pattern": "Troponin measured at 0h and 2.5h instead of exactly 3.0h",
         "standard_deduction": -10,
         "calibrated_deduction": 0,
@@ -42,9 +42,9 @@ HUMAN_FEEDBACK_EXEMPLARS = [
         "calibration_action": "Suppress Timing Discrepancy"
     },
     {
-        "id": "HFC-EX-04",
+        "id": "ERC-EX-04",
         "department": "Gastroenterology",
-        "clinician_reviewer": "Dr. Maya Patel, MD, FACG",
+        "guideline_source": "AASLD Acute Variceal Hemorrhage Guidelines",
         "pattern": "Lactulose titration charting delayed during acute variceal bleed stabilization",
         "standard_deduction": -20,
         "calibrated_deduction": 0,
@@ -53,10 +53,13 @@ HUMAN_FEEDBACK_EXEMPLARS = [
     }
 ]
 
+# Backward compatibility alias
+HUMAN_FEEDBACK_EXEMPLARS = EXPERT_RULE_CALIBRATION_EXEMPLARS
 
-class HumanFeedbackCalibrator:
+
+class ExpertRuleCalibrator:
     """
-    Applies expert human-feedback calibration to multi-agent raw scores and findings.
+    Applies expert guideline calibration rules to multi-agent raw scores and findings.
     """
 
     @classmethod
@@ -87,7 +90,7 @@ class HumanFeedbackCalibrator:
             suppressed = False
             suppress_reason = ""
 
-            for ex in HUMAN_FEEDBACK_EXEMPLARS:
+            for ex in EXPERT_RULE_CALIBRATION_EXEMPLARS:
                 ex_dept = ex["department"].lower()
                 if (ex_dept in dept_lower or not dept_lower or "medicine" in dept_lower):
                     if any(k in desc_lower for k in ["ecg lead", "stemi triage", "millivolt", "shorthand"]) and "ecg" in ex["pattern"].lower():
@@ -184,3 +187,8 @@ class HumanFeedbackCalibrator:
         n = len(probabilities)
         brier = sum((p - y) ** 2 for p, y in zip(probabilities, outcomes)) / n
         return round(brier, 4)
+
+
+# Backward compatibility alias
+HumanFeedbackCalibrator = ExpertRuleCalibrator
+

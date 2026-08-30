@@ -147,19 +147,18 @@ function extractClinicalMetadata(rawText, fileName) {
     if (!department) department = 'Cardiology / Emergency Unit';
   }
 
-  // Fallbacks
-  const baseName = (fileName || 'Document').replace(/\.[^/.]+$/, '').replace(/[_\-]/g, ' ');
+  // Fallbacks: Use neutral Unknown / Not documented rather than fabricated identities
   if (!patientName) {
-    patientName = cleanText.length > 20 ? 'Clinical Case Record' : `${baseName} Patient`;
+    patientName = 'Unknown / Not documented';
   }
   if (!doctorName) {
-    doctorName = 'Attending Physician';
+    doctorName = 'Unknown / Not documented';
   }
   if (!hospitalName) {
-    hospitalName = 'Metropolitan General Hospital';
+    hospitalName = 'Unknown / Not documented';
   }
   if (!department) {
-    department = 'Clinical Department';
+    department = 'Unknown / Not documented';
   }
   if (!specialization) {
     specialization = 'General Medicine';

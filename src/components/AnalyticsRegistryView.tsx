@@ -68,7 +68,7 @@ const PRACTITIONERS: PractitionerProfile[] = [
     lastAudit: '2026-08-19',
   },
   {
-    name: 'Dr. Elena Vance',
+    name: 'Dr. Angela Miller',
     npi: 'NPI-5829104928',
     specialty: 'Emergency Medicine',
     hospital: 'Northwestern Memorial Clinic',

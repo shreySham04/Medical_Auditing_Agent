@@ -100,6 +100,25 @@ class StructuredEvidenceExtractor:
             procedures.append("Knee Arthroscopy & Meniscectomy")
         evidence.procedures_identified = procedures
 
+        # Lab values extraction
+        labs = {}
+        troponin_m = re.search(r'(?:Troponin|cTn|hs-cTn)\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*(?:ng/mL|ng/L|pg/mL)?', raw, re.IGNORECASE)
+        if troponin_m:
+            labs["troponin"] = float(troponin_m.group(1))
+        inr_m = re.search(r'INR\s*[:\-]?\s*(\d+(?:\.\d+)?)', raw, re.IGNORECASE)
+        if inr_m:
+            labs["inr"] = float(inr_m.group(1))
+        bili_m = re.search(r'(?:Bilirubin|Total\s*Bilirubin)\s*[:\-]?\s*(\d+(?:\.\d+)?)', raw, re.IGNORECASE)
+        if bili_m:
+            labs["bilirubin"] = float(bili_m.group(1))
+        creat_m = re.search(r'(?:Creatinine|Serum\s*Creatinine)\s*[:\-]?\s*(\d+(?:\.\d+)?)', raw, re.IGNORECASE)
+        if creat_m:
+            labs["creatinine"] = float(creat_m.group(1))
+        meld_m = re.search(r'(?:MELD|MELD-Na)\s*[:\-]?\s*(\d{1,2})', raw, re.IGNORECASE)
+        if meld_m:
+            labs["meld_score"] = int(meld_m.group(1))
+        evidence.lab_values = labs
+
         # Medications Identified
         meds = []
         med_keywords = ["aspirin", "heparin", "ceftriaxone", "azithromycin", "vancomycin", "furosemide", "spironolactone", "lactulose", "rifaximin", "propofol", "fentanyl", "norepinephrine", "vasopressin"]
@@ -108,17 +127,50 @@ class StructuredEvidenceExtractor:
                 meds.append(med.capitalize())
         evidence.medications_ordered = meds
 
+        # Timing Milestones
+        milestones = {}
+        ecg_time_m = re.search(r'(?:ECG|EKG)\s*(?:acquired|obtained|done|within)\s*(?:within|at|in)?\s*(\d{1,2})\s*min', raw, re.IGNORECASE)
+        if ecg_time_m:
+            milestones["door_to_ecg_minutes"] = int(ecg_time_m.group(1))
+        elif "ecg delayed" in lower or "delayed ecg" in lower:
+            milestones["door_to_ecg_minutes"] = 45
+        
+        balloon_time_m = re.search(r'(?:Door-to-balloon|D2B)\s*[:\-]?\s*(\d{1,3})\s*min', raw, re.IGNORECASE)
+        if balloon_time_m:
+            milestones["door_to_balloon_minutes"] = int(balloon_time_m.group(1))
+        
+        if evidence.physician_time_minutes is not None:
+            milestones["physician_bedside_minutes"] = evidence.physician_time_minutes
+            
+        evidence.timing_milestones = milestones
+
+        # Procedural and Coding Predicates for Rule Evaluation
+        procedural_pred = {
+            "has_modifier_59": "-59" in raw or "modifier 59" in lower,
+            "is_same_incision": any(t in lower for t in ["same incision", "same knee", "same compartment", "identical arthrotomy"]),
+            "has_informed_consent": any(term in lower for term in ["informed consent", "consent obtained", "risks, benefits, and alternatives explained", "consent signed"]),
+            "has_radiograph_confirmed": any(t in lower for t in ["chest x-ray", "cxr", "chest radiograph", "ct chest", "infiltrate confirmed"]) and not any(t in lower for t in ["no chest x-ray", "no imaging", "omitted chest x-ray"]),
+            "has_blood_cultures_drawn": ("blood culture" in lower or "cultures drawn" in lower) and not any(t in lower for t in ["no blood culture", "blood cultures omitted", "without prior blood culture", "cultures were not drawn"]),
+        }
+        evidence.procedural_predicates = procedural_pred
+
         # CPT Codes Identified
         cpt_matches = re.findall(r'\b(992\d{2}|929\d{2}|432\d{2}|490\d{2}|298\d{2}|365\d{2}|315\d{2})\b', raw)
         evidence.cpt_codes_identified = list(set(cpt_matches))
+        evidence.coding_predicates = {
+            "cpt_99291_critical_care": "99291" in cpt_matches or "99291" in raw,
+            "cpt_27447_tka": "27447" in cpt_matches or "27447" in raw,
+            "cpt_29881_meniscectomy": "29881" in cpt_matches or "29881" in raw,
+            "cpt_92928_pci": "92928" in cpt_matches or "92928" in raw,
+            "cpt_99285_ed_lvl5": "99285" in cpt_matches or "99285" in raw,
+        }
 
         # Signatures & Attestation Verification
         has_sig = any(term in lower for term in ["electronically signed", "authenticated by", "signature:", "signed by", "dr.", "md,", "do,"])
         evidence.has_attending_signature = has_sig
 
         # Informed Consent Verification
-        has_consent = any(term in lower for term in ["informed consent", "consent obtained", "risks, benefits, and alternatives explained", "consent signed"])
-        evidence.has_informed_consent = has_consent
+        evidence.has_informed_consent = procedural_pred["has_informed_consent"]
 
         # Missing Prerequisites Check
         if not vitals_dict and not evidence.is_truncated_or_incomplete:

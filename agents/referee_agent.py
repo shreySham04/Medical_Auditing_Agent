@@ -1,6 +1,6 @@
 """
 Referee & Supervisory Agent.
-Orchestrates domain agents with Rule Grounding and Human-Feedback Calibration.
+Orchestrates domain agents with Rule Grounding and Expert-Rule Calibration.
 """
 
 import os
@@ -14,18 +14,18 @@ if str(root_dir) not in sys.path:
 from orchestration.pipeline import MedicalAuditOrchestrator
 
 
-async def run_forensic_pipeline(record_text: str, patient_name: str = "Unknown Patient") -> dict:
+async def run_forensic_pipeline(record_text: str, patient_name: str = "Unknown / Not documented") -> dict:
     """
-    Main orchestration pipeline empowered by Rule Grounding and Human-Feedback Calibration.
+    Main orchestration pipeline empowered by Rule Grounding and Expert-Rule Calibration.
 
     Architecture:
     - Rule Grounding: Ingests CMS 2026, AHA/ACC, AAOS & AMA CPT official knowledge base.
-    - Human-Feedback Calibration: Calibrates scores against clinician advisory consensus to prevent alert fatigue.
+    - Expert-Rule Calibration: Calibrates scores against clinician advisory consensus to prevent alert fatigue.
     - 5-Step Evidence Chain: Official Document -> Real Retrieval -> Citations -> Finding -> Human Explanation.
     - Produces risk-stratified Audit Recommendations.
     """
     result = await MedicalAuditOrchestrator.audit_patient_record(record_text)
-    if patient_name and patient_name != "Unknown Patient" and result.get("patientName") in ["Marcus Vance", "De-identified Inpatient"]:
+    if patient_name and patient_name != "Unknown / Not documented" and result.get("patientName") in ["Unknown / Not documented", "De-identified Inpatient"]:
         result["patientName"] = patient_name
     return result
 
