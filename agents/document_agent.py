@@ -85,9 +85,26 @@ async def run_document_agent(record_text: str) -> dict:
         # Intelligent Offline / Deterministic Fallback with Multilingual Detection
         text_lower = record_text.lower()
         
-        # Check non-clinical
-        is_cv = "curriculum vitae" in text_lower or "resume" in text_lower or ("experience" in text_lower and "skills" in text_lower)
-        if is_cv:
+        # Check non-clinical (CV, Computer Science, Engineering, Homework, Non-Medical documents)
+        is_cv = "curriculum vitae" in text_lower or "resume" in text_lower or ("work experience" in text_lower and "skills" in text_lower)
+        is_cs_or_eng = any(w in text_lower for w in [
+            "operating system", "kernel", "process management", "cpu scheduling", "cache memory",
+            "paging", "virtual memory", "thread pool", "semaphore", "mutex", "deadlock",
+            "file system", "distributed system", "computer science", "database design",
+            "compiler", "homework assignment", "syllabus"
+        ])
+        medical_cues = [
+            "patient", "physician", "doctor", "hospital", "clinic", "diagnosis", "vitals",
+            "blood pressure", "bp", "pulse", "admission", "discharge", "medication", "rx",
+            "troponin", "ecg", "cirrhosis", "ascites", "meld", "liver", "surgery", "cpt", "icd",
+            "रोगी", "मरीज", "अस्पताल", "डॉ.", "चिकित्सक", "लिवर", "सिरोसिस", "जलोदर", "कार्डियो",
+            "paciente", "médico", "hospital", "diagnóstico", "patient", "médecin", "hôpital"
+        ]
+        has_medical = any(w in text_lower for w in medical_cues)
+        is_non_clinical = is_cv or is_cs_or_eng or (not has_medical and len(record_text) > 40)
+
+        if is_non_clinical:
+            doc_category = "CV / Resume" if is_cv else ("Computer Science / Academic Document" if is_cs_or_eng else "Non-Clinical Document")
             return {
                 "agent_name": "Document Ingestion & Multilingual RAG Agent",
                 "detected_language": "English (en)",
@@ -97,10 +114,10 @@ async def run_document_agent(record_text: str) -> dict:
                 "doctor_name": "N/A",
                 "hospital_name": "N/A",
                 "department": "N/A",
-                "specialization": "Invalid Document Type",
-                "english_normalized_text": "Non-clinical document (CV/Resume) rejected by Mauditor ingestion policy.",
+                "specialization": f"Invalid Type ({doc_category})",
+                "english_normalized_text": f"Non-clinical document ({doc_category}) rejected by Mauditor ingestion policy. Upload an Electronic Health Record (EHR), Discharge Summary, Operative Report, or Medical Billing Claim.",
                 "structured_clinical_entities": {},
-                "summary": "Uploaded file is a CV or non-clinical document.",
+                "summary": f"Uploaded file is a {doc_category}. Mauditor requires valid clinical healthcare records.",
                 "parsed_success": False
             }
 
@@ -136,21 +153,38 @@ async def run_document_agent(record_text: str) -> dict:
             department = "Orthopedics & Trauma Surgery"
             specialization = "Orthopedic Surgery"
 
+        # Dynamic regex parsing for patient and doctor names
+        patient_extracted = "De-identified Inpatient"
+        p_match = re.search(r'(?:patient(?:\s+name)?|रोगी|मरीज|paciente|patient)[\s:]+([A-Za-z\u0900-\u097F\s\.\-]+?)(?:\n|,|\||;|\(|\d)', record_text, re.IGNORECASE)
+        if p_match and len(p_match.group(1).strip()) > 2:
+            patient_extracted = p_match.group(1).strip()
+
+        doctor_extracted = "Attending Physician"
+        d_match = re.search(r'(?:dr\.|doctor|physician|md|डॉ\.|चिकित्सक|médico)[\s:]*([A-Za-z\u0900-\u097F\s\.\-]+?)(?:\n|,|\||;|\(|\d)', record_text, re.IGNORECASE)
+        if d_match and len(d_match.group(1).strip()) > 2:
+            doctor_extracted = f"Dr. {d_match.group(1).replace('Dr.', '').replace('dr.', '').strip()}"
+
+        hospital_extracted = "Healthcare Facility"
+        h_match = re.search(r'(?:hospital|clinic|center|medical center|अस्पताल|hospital)[\s:]*([A-Za-z\u0900-\u097F\s\.\-]+?)(?:\n|,|\||;)', record_text, re.IGNORECASE)
+        if h_match and len(h_match.group(1).strip()) > 3:
+            hospital_extracted = h_match.group(1).strip()
+        elif "hospital" in text_lower or "अस्पताल" in text_lower:
+            hospital_extracted = "Metropolitan Healthcare Facility"
+
         return {
             "agent_name": "Document Ingestion & Multilingual RAG Agent",
             "detected_language": detected_lang,
             "language_code": lang_code,
             "document_type": "CLINICAL_EHR",
-            "patient_name": "John Doe (जॉन डो)" if ("john doe" in text_lower or "जॉन डो" in text_lower) else ("Sarah Jenkins" if "jenkins" in text_lower else ("Elena Rodriguez" if lang_code == "es" else "Robert Davis")),
-            "doctor_name": "Dr. S. Rao, MD (डॉ. एस. राव)" if ("राव" in text_lower or "rao" in text_lower) else ("Dr. Angela Vance" if "vance" in text_lower else "Dr. Tyler Chase"),
-            "hospital_name": "Metropolitan General Hospital" if ("metropolitan" in text_lower or "मेट्रोपॉलिटन" in text_lower) else "Metro General Hospital",
+            "patient_name": patient_extracted,
+            "doctor_name": doctor_extracted,
+            "hospital_name": hospital_extracted,
             "department": department,
             "specialization": specialization,
             "english_normalized_text": f"Canonical English Ingested Clinical Record (Normalized from {detected_lang}):\n\n{record_text}",
             "structured_clinical_entities": {
-                "vitals": {"bp": "108/68", "hr": "88", "spo2": "97%", "rr": "18"},
-                "diagnoses": ["Decompensated Liver Cirrhosis (HCV, Alcohol Etiology)", "Portal Hypertension", "Grade II Esophageal Varices", "Ascites", "Stage 1 Hepatic Encephalopathy", "Child-Pugh Class C (13 pts)", "MELD-Na Score 31"],
-                "procedures_and_codes": ["Endoscopic Variceal Ligation (EVL)", "Diagnostic Paracentesis", "High MDM Inpatient Hospital Care (CPT 99223)"]
+                "specialty": specialization,
+                "department": department
             },
             "summary": f"Clinical record normalized from {detected_lang} into standard English clinical format.",
             "parsed_success": True

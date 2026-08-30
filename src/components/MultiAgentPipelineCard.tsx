@@ -106,8 +106,8 @@ export const MultiAgentPipelineCard: React.FC<MultiAgentPipelineCardProps> = ({
                 </div>
 
                 {/* Info Text */}
-                <div className="min-w-0 flex-1 pr-1">
-                  <h4 className="text-xs font-mono font-semibold text-slate-200 group-hover:text-cyan-300 transition-colors">
+                <div className="min-w-0 flex-1 pr-1.5 overflow-hidden">
+                  <h4 className="text-xs font-mono font-semibold text-slate-200 group-hover:text-cyan-300 transition-colors truncate">
                     {stage.title}
                   </h4>
                   <p className="text-[10px] text-slate-400 line-clamp-1 font-sans">
@@ -117,7 +117,7 @@ export const MultiAgentPipelineCard: React.FC<MultiAgentPipelineCardProps> = ({
 
                 {/* Status Badge */}
                 <span
-                  className={`px-2 py-0.5 rounded text-[9px] font-mono tracking-wider uppercase border whitespace-nowrap ${getBadgeStyle(
+                  className={`flex-shrink-0 px-2 py-0.5 rounded text-[9px] font-mono tracking-wider uppercase border whitespace-nowrap ${getBadgeStyle(
                     stage.status
                   )}`}
                 >

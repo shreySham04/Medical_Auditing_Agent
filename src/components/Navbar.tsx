@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldCheck, Scale, Building2, HelpCircle, Activity, Server } from 'lucide-react';
+import { ShieldCheck, Scale, Building2, HelpCircle, Activity, Server, FileCheck, Award } from 'lucide-react';
 
 interface NavbarProps {
   activeTab: string;
@@ -15,9 +15,10 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const tabs = [
     { id: 'investigator', label: 'FORENSIC INVESTIGATOR', icon: ShieldCheck },
+    { id: 'dataset', label: 'SYNTHETIC BENCHMARK & EVALUATION', icon: Award },
+    { id: 'analytics', label: 'HUMAN-FEEDBACK CALIBRATION', icon: Building2 },
     { id: 'queue', label: 'COMPLAINT REVIEW QUEUE', icon: Scale },
-    { id: 'analytics', label: 'ANALYTICS & RELIABILITY REGISTRY', icon: Building2 },
-    { id: 'guide', label: 'SYSTEM GUIDE', icon: HelpCircle },
+    { id: 'guide', label: 'SYSTEM ARCHITECTURE GUIDE', icon: HelpCircle },
   ];
 
   return (
@@ -35,11 +36,14 @@ export const Navbar: React.FC<NavbarProps> = ({
               <div className="flex items-center gap-2">
                 <h1 className="text-lg font-bold text-white tracking-tight">MedicalAuditor</h1>
                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                  Python FastAPI v2.1
+                  Research Prototype v2.1
+                </span>
+                <span className="hidden sm:inline-block text-[9px] font-medium px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                  Rule Grounding & Calibration
                 </span>
               </div>
               <p className="text-xs text-slate-400 hidden sm:block">
-                Multi-Agent AI System for Forensic Medical & Billing Compliance Auditing
+                Evidence-Based Multi-Agent Clinical & Billing Compliance Audit Pipeline
               </p>
             </div>
           </div>
@@ -48,7 +52,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="flex items-center gap-3 text-xs">
             <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300">
               <Server className="w-3.5 h-3.5 text-blue-400" />
-              <span>Python Backend: <strong className="text-slate-100 font-mono">Port 8088 / 3000</strong></span>
+              <span>Evidence Engine: <strong className="text-slate-100 font-mono">CMS/AMA Grounded</strong></span>
             </div>
 
             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${
@@ -58,7 +62,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             }`}>
               <Activity className={`w-3.5 h-3.5 ${isBackendHealthy ? 'animate-pulse' : ''}`} />
               <span className="font-medium">
-                {isBackendHealthy ? 'FastAPI Active' : 'Connecting to Backend...'}
+                {isBackendHealthy ? 'Calibrated Engine Active' : 'Connecting to Backend...'}
               </span>
             </div>
           </div>

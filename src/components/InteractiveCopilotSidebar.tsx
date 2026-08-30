@@ -73,7 +73,7 @@ export const InteractiveCopilotSidebar: React.FC<InteractiveCopilotSidebarProps>
   };
 
   return (
-    <aside className="w-80 sm:w-[370px] flex-shrink-0 bg-[#070b14] border-l border-[#121927] flex flex-col h-full overflow-hidden select-none transition-all duration-300">
+    <aside className="fixed right-0 top-14 bottom-8 w-full sm:w-[440px] flex-shrink-0 bg-[#070b14]/95 backdrop-blur-xl border-l border-[#1e293b] flex flex-col overflow-hidden select-none transition-all duration-300 z-40 shadow-[-15px_0_45px_rgba(0,0,0,0.85)]">
       {/* Header */}
       <div className="px-4 py-3 border-b border-[#121927] flex items-center justify-between bg-[#070b14]">
         <div className="flex items-center gap-2.5">

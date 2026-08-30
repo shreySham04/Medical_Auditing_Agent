@@ -127,16 +127,16 @@ export const ClinicalIngestionCard: React.FC<ClinicalIngestionCardProps> = ({
         {/* Row 1: Doctor Name & Specialization */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           {/* Doctor Name */}
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center justify-between text-[9px] font-mono text-slate-400">
-              <span>ATTENDING DOCTOR NAME</span>
-              <span className="px-1.5 py-0.2 rounded border border-[#2b3a54] bg-[#070b14] text-slate-400 text-[8px]">
-                AUTO-DETECTED
+          <div className="flex flex-col gap-1 min-w-0">
+            <div className="flex items-center justify-between text-[9px] font-mono text-slate-400 gap-1 overflow-hidden">
+              <span className="truncate">ATTENDING DOCTOR</span>
+              <span className="px-1.5 py-0.2 rounded border border-[#2b3a54] bg-[#070b14] text-slate-400 text-[8px] flex-shrink-0">
+                AUTO
               </span>
             </div>
-            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#070b14] border border-[#1e293b] text-xs font-mono text-slate-300">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#070b14] border border-[#1e293b] text-xs font-mono text-slate-300 min-w-0">
               <span
-                className={`w-2 h-2 rounded-full ${
+                className={`w-2 h-2 rounded-full flex-shrink-0 ${
                   isPending(clinicianParams.doctorName)
                     ? 'bg-slate-600'
                     : 'bg-cyan-400 shadow-[0_0_6px_#22d3ee]'
@@ -147,22 +147,22 @@ export const ClinicalIngestionCard: React.FC<ClinicalIngestionCardProps> = ({
                 value={clinicianParams.doctorName}
                 onChange={(e) => onUpdateParams({ doctorName: e.target.value })}
                 placeholder="Pending Ingestion"
-                className="bg-transparent border-none outline-none w-full text-xs font-mono placeholder:text-slate-500 text-slate-200"
+                className="bg-transparent border-none outline-none w-full text-xs font-mono placeholder:text-slate-500 text-slate-200 truncate"
               />
             </div>
           </div>
 
           {/* Physician Specialization */}
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center justify-between text-[9px] font-mono text-slate-400">
-              <span>PHYSICIAN SPECIALIZATION</span>
-              <span className="px-1.5 py-0.2 rounded border border-[#2b3a54] bg-[#070b14] text-slate-400 text-[8px]">
-                AUTO-DETECTED
+          <div className="flex flex-col gap-1 min-w-0">
+            <div className="flex items-center justify-between text-[9px] font-mono text-slate-400 gap-1 overflow-hidden">
+              <span className="truncate">SPECIALIZATION</span>
+              <span className="px-1.5 py-0.2 rounded border border-[#2b3a54] bg-[#070b14] text-slate-400 text-[8px] flex-shrink-0">
+                AUTO
               </span>
             </div>
-            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#070b14] border border-[#1e293b] text-xs font-mono text-slate-300">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#070b14] border border-[#1e293b] text-xs font-mono text-slate-300 min-w-0">
               <span
-                className={`w-2 h-2 rounded-full ${
+                className={`w-2 h-2 rounded-full flex-shrink-0 ${
                   isPending(clinicianParams.specialization)
                     ? 'bg-slate-600'
                     : 'bg-cyan-400 shadow-[0_0_6px_#22d3ee]'
@@ -173,23 +173,23 @@ export const ClinicalIngestionCard: React.FC<ClinicalIngestionCardProps> = ({
                 value={clinicianParams.specialization}
                 onChange={(e) => onUpdateParams({ specialization: e.target.value })}
                 placeholder="Pending Ingestion"
-                className="bg-transparent border-none outline-none w-full text-xs font-mono placeholder:text-slate-500 text-slate-200"
+                className="bg-transparent border-none outline-none w-full text-xs font-mono placeholder:text-slate-500 text-slate-200 truncate"
               />
             </div>
           </div>
         </div>
 
         {/* Row 2: Hospital Facility Name */}
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center justify-between text-[9px] font-mono text-slate-400">
-            <span>HOSPITAL FACILITY NAME</span>
-            <span className="px-1.5 py-0.2 rounded border border-[#2b3a54] bg-[#070b14] text-slate-400 text-[8px]">
-              AUTO-DETECTED
+        <div className="flex flex-col gap-1 min-w-0">
+          <div className="flex items-center justify-between text-[9px] font-mono text-slate-400 gap-1 overflow-hidden">
+            <span className="truncate">HOSPITAL FACILITY NAME</span>
+            <span className="px-1.5 py-0.2 rounded border border-[#2b3a54] bg-[#070b14] text-slate-400 text-[8px] flex-shrink-0">
+              AUTO
             </span>
           </div>
-          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#070b14] border border-[#1e293b] text-xs font-mono text-slate-300">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#070b14] border border-[#1e293b] text-xs font-mono text-slate-300 min-w-0">
             <span
-              className={`w-2 h-2 rounded-full ${
+              className={`w-2 h-2 rounded-full flex-shrink-0 ${
                 isPending(clinicianParams.hospitalName)
                   ? 'bg-slate-600'
                   : 'bg-cyan-400 shadow-[0_0_6px_#22d3ee]'
@@ -200,22 +200,22 @@ export const ClinicalIngestionCard: React.FC<ClinicalIngestionCardProps> = ({
               value={clinicianParams.hospitalName}
               onChange={(e) => onUpdateParams({ hospitalName: e.target.value })}
               placeholder="Pending Ingestion"
-              className="bg-transparent border-none outline-none w-full text-xs font-mono placeholder:text-slate-500 text-slate-200"
+              className="bg-transparent border-none outline-none w-full text-xs font-mono placeholder:text-slate-500 text-slate-200 truncate"
             />
           </div>
         </div>
 
         {/* Row 3: Acuity Department Division */}
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center justify-between text-[9px] font-mono text-slate-400">
-            <span>ACUITY DEPARTMENT DIVISION</span>
-            <span className="px-1.5 py-0.2 rounded border border-[#2b3a54] bg-[#070b14] text-slate-400 text-[8px]">
-              AUTO-DETECTED
+        <div className="flex flex-col gap-1 min-w-0">
+          <div className="flex items-center justify-between text-[9px] font-mono text-slate-400 gap-1 overflow-hidden">
+            <span className="truncate">ACUITY DEPARTMENT DIVISION</span>
+            <span className="px-1.5 py-0.2 rounded border border-[#2b3a54] bg-[#070b14] text-slate-400 text-[8px] flex-shrink-0">
+              AUTO
             </span>
           </div>
-          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#070b14] border border-[#1e293b] text-xs font-mono text-slate-300">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#070b14] border border-[#1e293b] text-xs font-mono text-slate-300 min-w-0">
             <span
-              className={`w-2 h-2 rounded-full ${
+              className={`w-2 h-2 rounded-full flex-shrink-0 ${
                 isPending(clinicianParams.department)
                   ? 'bg-slate-600'
                   : 'bg-cyan-400 shadow-[0_0_6px_#22d3ee]'
@@ -226,7 +226,7 @@ export const ClinicalIngestionCard: React.FC<ClinicalIngestionCardProps> = ({
               value={clinicianParams.department}
               onChange={(e) => onUpdateParams({ department: e.target.value })}
               placeholder="Pending Ingestion"
-              className="bg-transparent border-none outline-none w-full text-xs font-mono placeholder:text-slate-500 text-slate-200"
+              className="bg-transparent border-none outline-none w-full text-xs font-mono placeholder:text-slate-500 text-slate-200 truncate"
             />
           </div>
         </div>

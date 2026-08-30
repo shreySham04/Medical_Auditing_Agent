@@ -144,22 +144,9 @@ async def run_billing_agent(record_text: str) -> dict:
                 if part.text:
                     result_text += part.text
                     
-    import re
-    json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
-    if json_match:
-        try:
-            return json.loads(json_match.group())
-        except Exception:
-            pass
-    return {
-        "agent_name": "Billing Auditor",
-        "billing_score": 80,
-        "billing_grade": "B-",
-        "billing_standard_used": "AMA CPT Compliance Guidelines",
-        "billing_anomalies": ["Parsing error in billing agent output. Standard audit safeguards loaded."],
-        "fair_pricing_credits": [],
-        "financial_markdown": result_text or "Error executing billing audit."
-    }
+    from core.parser import validate_billing_output
+    parsed_output = validate_billing_output(result_text)
+    return parsed_output.to_dict()
 
 if __name__ == "__main__":
     test_record = "ECG kit charged separately $150. Level 5 visit billed."

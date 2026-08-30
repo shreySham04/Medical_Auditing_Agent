@@ -102,24 +102,25 @@ export const ScoreGaugeCard: React.FC<ScoreGaugeCardProps> = ({
             )}
           </span>
           <span className="text-[9px] font-mono font-bold tracking-widest text-slate-400 uppercase mt-1">
-            OVERALL SCORE
+            CALIBRATED SCORE
           </span>
         </div>
       </div>
 
-      {/* Audit Status Verdict */}
+      {/* Audit Recommendation */}
       <div className="flex flex-col items-center gap-1.5 w-full">
         <span className="text-[10px] font-mono font-bold tracking-[0.2em] text-slate-400 uppercase">
-          AUDIT STATUS VERDICT
+          AUDIT RECOMMENDATION
         </span>
 
         <div
-          className={`text-base sm:text-lg font-mono font-black tracking-widest uppercase transition-all duration-500 ${
+          className={`text-sm sm:text-base font-mono font-black tracking-widest uppercase transition-all duration-500 whitespace-nowrap truncate max-w-full text-center px-2 ${
             isAwaiting
               ? 'text-slate-300'
               : ''
           }`}
           style={{ color: isAwaiting ? '#cbd5e1' : primaryColor }}
+          title={verdict || 'AWAITING AUDIT...'}
         >
           {isAuditing ? (
             <span className="inline-flex items-center gap-2 animate-pulse text-cyan-400">

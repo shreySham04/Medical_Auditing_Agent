@@ -145,23 +145,9 @@ async def run_clinical_agent(record_text: str) -> dict:
                 if part.text:
                     result_text += part.text
                     
-    # Parse JSON block out of ADK agent response
-    import re
-    json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
-    if json_match:
-        try:
-            return json.loads(json_match.group())
-        except Exception:
-            pass
-    return {
-        "agent_name": "Clinical Auditor",
-        "clinical_score": 75,
-        "clinical_grade": "C",
-        "adherence_standard": "General Practice Guidelines",
-        "clinical_gaps": ["Parsing error in agent output. Default compliance check applied."],
-        "positive_indicators": [],
-        "critique_markdown": result_text or "Error executing clinical audit."
-    }
+    from core.parser import validate_clinical_output
+    parsed_output = validate_clinical_output(result_text)
+    return parsed_output.to_dict()
 
 if __name__ == "__main__":
     test_record = "Patient Jenkins arrived with chest pain. ECG done. Discharge signed late."

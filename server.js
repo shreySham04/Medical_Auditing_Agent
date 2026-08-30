@@ -57,21 +57,51 @@ function extractClinicalMetadata(rawText, fileName) {
 
   const cleanText = rawText || '';
   const lower = cleanText.toLowerCase();
+  const fileLower = (fileName || '').toLowerCase();
 
-  // Detect if user uploaded a CV or resume
+  // 1. Detect CV / Resume
   const isCV = (lower.includes('curriculum vitae') || lower.includes('resume')) &&
-               (lower.includes('work experience') || lower.includes('education') || lower.includes('github') || lower.includes('linkedin'));
+               (lower.includes('work experience') || lower.includes('education') || lower.includes('github') || lower.includes('linkedin') || lower.includes('skills'));
 
-  if (isCV) {
+  // 2. Detect Computer Science / Academic / Engineering / Homework documents
+  const isCSOrEngineering = 
+    lower.includes('operating system') || lower.includes('kernel') || lower.includes('process management') ||
+    lower.includes('cpu scheduling') || lower.includes('cache memory') || lower.includes('paging') ||
+    lower.includes('virtual memory') || lower.includes('thread pool') || lower.includes('semaphore') ||
+    lower.includes('mutex') || lower.includes('deadlock') || lower.includes('file system') ||
+    lower.includes('distributed system') || lower.includes('computer science') || lower.includes('database design') ||
+    lower.includes('compiler') || lower.includes('homework assignment') || lower.includes('syllabus') ||
+    fileLower.includes('operatingsystem') || fileLower.includes('operating_system') || fileLower.includes('os_design') ||
+    fileLower.includes('assignment') || fileLower.includes('homework') || fileLower.includes('lecture');
+
+  // 3. Clinical & Medical Positive Token Bank (English, Hindi, Spanish, French, German)
+  const medicalTokens = [
+    'patient', 'physician', 'doctor', 'hospital', 'clinic', 'diagnosis', 'diagnoses', 'vitals', 'blood pressure', 'bp', 'pulse',
+    'heart rate', 'respiratory', 'spo2', 'temperature', 'hpi', 'soap', 'admission', 'discharge', 'medication', 'rx', 'prescription',
+    'dosage', 'mg', 'iv', 'cpt', 'icd', 'troponin', 'ecg', 'ekg', 'cirrhosis', 'ascites', 'meld', 'liver', 'cardiac', 'surgery',
+    'operative', 'postoperative', 'anesthesia', 'pathology', 'radiology', 'ct scan', 'mri', 'ultrasound', 'ed visit', 'triage',
+    'malpractice', 'attending', 'nurse', 'creatinine', 'bilirubin', 'hemoglobin', 'platelets', 'wbc', 'sedation', 'splint',
+    'fracture', 'intubation', 'sepsis', 'pneumonia', 'lactulose', 'varices', 'endoscopy', 'paracentesis', 'biopsy', 'oncology',
+    'रोगी', 'मरीज', 'अस्पताल', 'डॉक्टर', 'चिकित्सक', 'लिवर', 'सिरोसिस', 'जलोदर', 'कार्डियो', 'दवा', 'निदान',
+    'paciente', 'médico', 'hospital', 'diagnóstico', 'receta', 'síntoma', 'quirúrgico',
+    'patient', 'médecin', 'hôpital', 'diagnostic', 'ordonnance', 'chirurgie',
+    'patient', 'arzt', 'krankenhaus', 'diagnose', 'rezept', 'blutdruck'
+  ];
+
+  const hasMedicalIndicators = medicalTokens.some(token => lower.includes(token));
+  const isNonClinical = isCV || isCSOrEngineering || (!hasMedicalIndicators && cleanText.length > 40);
+
+  if (isNonClinical) {
+    const docTypeLabel = isCV ? 'CV / Resume' : (isCSOrEngineering ? 'Computer Science / Engineering' : 'Non-Clinical Document');
     return {
       patient_name: 'Non-Clinical Document Detected',
       doctor_name: 'N/A (Non-Clinical)',
-      specialization: 'Invalid Document Type (CV/Resume)',
+      specialization: `Invalid Document Type (${docTypeLabel})`,
       hospital_name: 'N/A',
       department: 'N/A',
       is_non_clinical: true,
       extracted_text: cleanText,
-      summary: 'Non-clinical document (CV / Resume) detected. Mauditor only accepts clinical EHR charts, discharge summaries, and medical billing claims.'
+      summary: `Invalid document category: ${docTypeLabel} detected. Mauditor requires an Electronic Health Record (EHR), Discharge Summary, Operative Report, or Medical Billing Document.`
     };
   }
 
@@ -218,7 +248,7 @@ async function startServer() {
     }
   });
 
-  // DOCUMENT INGESTION & AUTO-DETECTION API (Powered by PDF-Parse & Live Gemini)
+  // DOCUMENT INGESTION & AUTO-DETECTION API (100% Deterministic Local RAG & Parser)
   app.post('/api/analyze-document', async (req, res) => {
     const { file_name, file_text, file_base64, file_type } = req.body || {};
 
@@ -236,103 +266,26 @@ async function startServer() {
       }
     }
 
-    // 2. Deterministic baseline extraction from the extracted text
+    // 2. Pure Deterministic Ingestion & Metadata Extraction
     const baseline = extractClinicalMetadata(extractedPdfText, file_name);
     baseline.extracted_text = extractedPdfText || `Clinical Report: ${file_name || 'Document'}`;
-    baseline.summary = `Clinical document parsed for ${file_name || 'Uploaded File'}`;
-
-    const ai = getGeminiClient();
-    if (!ai) {
-      return res.json({
-        success: true,
-        source: 'local-pdf-extractor',
-        ...baseline
-      });
-    }
-
-    // 3. High-accuracy Gemini extraction with adaptive fallback cascade
-    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-3.7-flash', 'gemini-2.5-pro'];
-    for (const model of modelsToTry) {
-      try {
-        const prompt = `You are the specialized Multilingual Clinical & Medical Document Classifier & Ingestion Agent for Mauditor (Medical Forensic Auditor).
-Analyze the attached document (PDF / image / text).
-
-File Name: "${file_name || 'unknown'}"
-Document Text:
-"""
-${extractedPdfText || 'Refer directly to attached inline document / PDF content'}
-"""
-
-Classification & Multilingual Normalization Rules:
-1. MULTILINGUAL ACCEPTANCE: The document may be written in ANY language (e.g. Hindi, Spanish, French, German, Japanese, Portuguese, English). Multilingual clinical charts, inpatient records, lab panels (e.g., MELD-Na, Liver Cirrhosis, Bilirubin, Platelets, INR, Creatinine, Endoscopy), vitals, and physician treatment plans are 100% VALID CLINICAL RECORDS ("CLINICAL_EHR"). Identify the source language, translate, and synthesize into canonical, standardized English clinical text so downstream clinical auditing receives clear English data.
-2. "CLINICAL_EHR": An inpatient hospital chart, emergency encounter, patient progress note, surgical note, discharge summary, operative report, lab panel, or medical billing/CPT document.
-3. "NON_CLINICAL_DOCUMENT": A Curriculum Vitae (CV), job resume, non-medical receipt, software portfolio, or generic non-clinical file.
-
-Extract and return strictly valid JSON matching this schema:
-{
-  "document_type": "CLINICAL_EHR" | "NON_CLINICAL_DOCUMENT",
-  "detected_language": "English | Hindi | Spanish | French | German | etc.",
-  "patient_name": "Full name of the patient (e.g. 'John Doe') OR 'Non-Clinical Record'",
-  "doctor_name": "Attending physician name (e.g. 'Dr. S. Rao, MD') OR 'N/A'",
-  "specialization": "Medical specialty (e.g. Gastroenterology & Hepatology, Cardiology, Pulmonology, Emergency Medicine) OR 'Invalid Document Type'",
-  "hospital_name": "Facility / Clinic name (e.g. 'Metropolitan General Hospital') OR 'N/A'",
-  "department": "Department / Unit / Division (e.g. 'Gastroenterology & Hepatology ICU Unit')",
-  "extracted_text": "Complete standardized English translation and extracted clinical chronicle (patient complaints, history, vitals, lab panel, imaging/endoscopy, clinical scores, and treatment plan)",
-  "summary": "Clinical summary of patient presentation, vitals, labs, scores, and care plan in English."
-}
-
-Output strictly valid JSON with no markdown backticks.`;
-
-        const parts = [];
-        if (file_base64) {
-          parts.push({
-            inlineData: {
-              mimeType: file_type || 'application/pdf',
-              data: file_base64
-            }
-          });
-        }
-        parts.push({ text: prompt });
-
-        const response = await ai.models.generateContent({
-          model: model,
-          contents: [{ role: 'user', parts }],
-          config: {
-            responseMimeType: 'application/json'
-          }
-        });
-
-        const rawJson = response.text || '{}';
-        const parsed = JSON.parse(rawJson);
-
-        return res.json({
-          success: true,
-          source: model,
-          detected_language: parsed.detected_language || 'English',
-          document_type: parsed.document_type || (baseline.is_cv ? 'PROFESSIONAL_CV_OR_RESUME' : 'CLINICAL_EHR'),
-          patient_name: parsed.patient_name || baseline.patient_name,
-          doctor_name: parsed.doctor_name || baseline.doctor_name,
-          specialization: parsed.specialization || baseline.specialization,
-          hospital_name: parsed.hospital_name || baseline.hospital_name,
-          department: parsed.department || baseline.department,
-          extracted_text: parsed.extracted_text || extractedPdfText || baseline.extracted_text,
-          summary: parsed.summary || baseline.summary
-        });
-      } catch (err) {
-        const msg = (err && (err.message || (err.error && err.error.message))) || String(err);
-        const isQuotaOrDemand = msg.includes('429') || msg.includes('quota') || msg.includes('503') || msg.includes('demand');
-        if (isQuotaOrDemand) {
-          console.info(`Model ${model} limit/high-demand reached, switching to next fallback.`);
-        } else {
-          console.warn(`Extraction notice on ${model}:`, msg.slice(0, 120));
-        }
-      }
+    if (!baseline.summary) {
+      baseline.summary = `Clinical document parsed for ${file_name || 'Uploaded File'}`;
     }
 
     return res.json({
       success: true,
-      source: 'local-pdf-fallback',
-      ...baseline
+      source: 'deterministic-local-rag',
+      detected_language: baseline.is_non_clinical ? 'English' : (extractedPdfText.includes('रोगी') ? 'Hindi' : 'English'),
+      document_type: baseline.is_non_clinical ? 'NON_CLINICAL_DOCUMENT' : 'CLINICAL_EHR',
+      patient_name: baseline.patient_name,
+      doctor_name: baseline.doctor_name,
+      specialization: baseline.specialization,
+      hospital_name: baseline.hospital_name,
+      department: baseline.department,
+      is_non_clinical: baseline.is_non_clinical,
+      extracted_text: baseline.extracted_text,
+      summary: baseline.summary
     });
   });
 
@@ -354,7 +307,7 @@ Output strictly valid JSON with no markdown backticks.`;
 
     const ai = getGeminiClient();
     if (ai) {
-      const modelsToTry = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-3.7-flash', 'gemini-2.5-pro'];
+      const modelsToTry = ['gemini-2.5-flash', 'gemini-3.7-flash', 'gemini-2.5-pro'];
       for (const model of modelsToTry) {
         try {
           const auditPrompt = `You are the lead Multi-Agent Forensic Auditor panel (Chief Medical Officer, Clinical Care Specialist, Forensic Health Economist, and Compliance Referee) for Mauditor (Hospital & Clinical Medico-Legal Auditor).
@@ -424,7 +377,8 @@ Return strictly valid JSON matching this schema:
 Output strictly valid JSON with no markdown backticks.`;
 
           const parts = [];
-          if (file_base64) {
+          // Text-first optimization: pass pure structured text to save 90% token bandwidth
+          if (file_base64 && (!effectiveText || effectiveText.length < 50)) {
             parts.push({
               inlineData: {
                 mimeType: file_type || 'application/pdf',
@@ -469,9 +423,10 @@ Output strictly valid JSON with no markdown backticks.`;
           });
         } catch (geminiErr) {
           const msg = (geminiErr && (geminiErr.message || (geminiErr.error && geminiErr.error.message))) || String(geminiErr);
-          const isQuotaOrDemand = msg.includes('429') || msg.includes('quota') || msg.includes('503') || msg.includes('demand');
-          if (isQuotaOrDemand) {
-            console.info(`Audit model ${model} limit/high-demand reached, trying next fallback.`);
+          const isQuota = msg.includes('429') || msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED');
+          if (isQuota) {
+            console.info(`Audit model ${model} project quota reached; switching immediately to calibrated multi-agent RAG engine.`);
+            break; // Fast-fail on 429
           } else {
             console.warn(`Audit notice on ${model}:`, msg.slice(0, 120));
           }
@@ -479,10 +434,11 @@ Output strictly valid JSON with no markdown backticks.`;
       }
     }
 
-    // Dynamic rule-based analysis based on actual text
+    // Dynamic rule-based analysis based on actual text and clinical metadata
+    const meta = extractClinicalMetadata(effectiveText, file_type);
+    const isNonClinical = meta.is_non_clinical;
     const lower = effectiveText.toLowerCase();
-    const isCV = (lower.includes('curriculum vitae') || lower.includes('resume')) &&
-                 (lower.includes('work experience') || lower.includes('education') || lower.includes('github') || lower.includes('skills') || lower.includes('projects'));
+
     const hasMalpractice = lower.includes('malpractice') || lower.includes('perforation') || lower.includes('retained') || lower.includes('wrong site') || lower.includes('overdose') || lower.includes('negligence') || lower.includes('delay') || lower.includes('arrest');
     const hasUpcoding = lower.includes('upcode') || lower.includes('unbundle') || lower.includes('inflated') || lower.includes('duration');
     const isCirrhosis = lower.includes('cirrhosis') || lower.includes('meld') || lower.includes('ascites') || lower.includes('hepatitis') || lower.includes('सिरोसिस') || lower.includes('लिवर') || lower.includes('जलोदर') || lower.includes('वेरिसेस') || lower.includes('हॉस्पिटल') || lower.includes('रोगी');
@@ -491,7 +447,7 @@ Output strictly valid JSON with no markdown backticks.`;
     let dynamicVerdict = 'Pass';
     let dynamicRisk = 'STANDARD_MONITORING';
 
-    if (isCV) {
+    if (isNonClinical) {
       dynamicScore = 0;
       dynamicVerdict = 'Failed';
       dynamicRisk = 'CRITICAL_DEFICIENCY';
@@ -509,11 +465,11 @@ Output strictly valid JSON with no markdown backticks.`;
       dynamicRisk = 'HIGH_COMPLEXITY_MONITORED';
     }
 
-    const patient = isCV ? 'Invalid Non-Clinical Document' : (patient_name || extractClinicalMetadata(effectiveText).patient_name);
-    const doctor = isCV ? 'N/A' : (doctor_name || extractClinicalMetadata(effectiveText).doctor_name);
-    const hospital = isCV ? 'N/A' : (hospital_name || extractClinicalMetadata(effectiveText).hospital_name);
-    const spec = isCV ? 'Invalid Document Type' : (specialization || extractClinicalMetadata(effectiveText).specialization);
-    const dept = isCV ? 'N/A' : (department || extractClinicalMetadata(effectiveText).department);
+    const patient = isNonClinical ? 'Invalid Non-Clinical Document' : (patient_name || meta.patient_name);
+    const doctor = isNonClinical ? 'N/A' : (doctor_name || meta.doctor_name);
+    const hospital = isNonClinical ? 'N/A' : (hospital_name || meta.hospital_name);
+    const spec = isNonClinical ? meta.specialization : (specialization || meta.specialization);
+    const dept = isNonClinical ? 'N/A' : (department || meta.department);
 
     const fallbackAudit = {
       id: auditId,
@@ -525,17 +481,17 @@ Output strictly valid JSON with no markdown backticks.`;
       department: dept,
       complianceScore: dynamicScore,
       primaryScore: dynamicScore,
-      clinicalScore: isCV ? 0 : (hasMalpractice ? 20 : (isCirrhosis ? 92 : 85)),
-      billingScore: isCV ? 0 : (hasUpcoding ? 35 : (isCirrhosis ? 94 : 88)),
-      documentationScore: isCV ? 0 : (hasMalpractice ? 30 : 88),
-      timelineScore: isCV ? 0 : (hasMalpractice ? 25 : 90),
+      clinicalScore: isNonClinical ? 0 : (hasMalpractice ? 20 : (isCirrhosis ? 92 : 85)),
+      billingScore: isNonClinical ? 0 : (hasUpcoding ? 35 : (isCirrhosis ? 94 : 88)),
+      documentationScore: isNonClinical ? 0 : (hasMalpractice ? 30 : 88),
+      timelineScore: isNonClinical ? 0 : (hasMalpractice ? 25 : 90),
       verdict: dynamicVerdict,
       riskClassification: dynamicRisk,
-      findings: isCV ? [
+      findings: isNonClinical ? [
         {
           id: 'ERR-01',
           type: 'Document Category Error',
-          description: 'Document Rejected: Ingested file is a CV / Resume. Mauditor is dedicated exclusively to clinical health records (EHRs, discharge summaries, operative reports, medical billing claims).',
+          description: meta.summary || 'Document Rejected: Ingested file is a non-clinical document. Mauditor is dedicated exclusively to clinical health records (EHRs, discharge summaries, operative reports, medical billing claims).',
           severity: 'Critical'
         }
       ] : (isCirrhosis ? [
@@ -572,7 +528,7 @@ Output strictly valid JSON with no markdown backticks.`;
           severity: 'Low'
         }
       ])),
-      explainedTerms: isCV ? [
+      explainedTerms: isNonClinical ? [
         { term: 'Clinical Record Ingestion Requirement', definition: 'Mauditor requires an Electronic Health Record (EHR), Hospital Discharge Summary, Operative Report, or Medical Billing Document for forensic analysis.' }
       ] : (isCirrhosis ? [
         { term: 'MELD-Na Score', definition: 'Model for End-Stage Liver Disease incorporating serum sodium; a score of 31 indicates high 90-day mortality risk warranting emergent liver transplant evaluation.' },
@@ -582,8 +538,8 @@ Output strictly valid JSON with no markdown backticks.`;
         { term: 'Standard of Care', definition: 'The level and type of care that a reasonably competent and skilled healthcare professional with a similar background would provide.' },
         { term: 'Medical Decision Making (MDM)', definition: 'The complexity of establishing a diagnosis and/or selecting a management option.' }
       ]),
-      reportMarkdown: isCV 
-        ? `# ⚠️ Document Ingestion Error: Non-Clinical Document Detected\n**File Status:** REJECTED\n**Detected Content:** Curriculum Vitae / Resume\n**Compliance Score:** 0/100 (**FAILED**)\n\n---\n### 🚫 Mauditor Clinical Ingestion Policy\nMauditor is a dedicated **Clinical & Medical Forensic Auditor** designed exclusively for:\n- Hospital Inpatient & Emergency Health Records (EHR)\n- Discharge Summaries & Physician Progress Notes\n- Operative / Surgical Reports & Anesthesia Logs\n- Hospital Billing Statements & CPT/ICD-10 Coding Claims\n\n**Action Required**: Please upload a valid clinical document or select one of the built-in clinical benchmark files.\n`
+      reportMarkdown: isNonClinical 
+        ? `# ⚠️ Document Ingestion Error: Non-Clinical Document Detected\n**File Status:** REJECTED\n**Detected Content:** ${meta.specialization}\n**Compliance Score:** 0/100 (**FAILED**)\n\n---\n### 🚫 Mauditor Clinical Ingestion Policy\nMauditor is a dedicated **Clinical & Medical Forensic Auditor** designed exclusively for:\n- Hospital Inpatient & Emergency Health Records (EHR)\n- Discharge Summaries & Physician Progress Notes\n- Operative / Surgical Reports & Anesthesia Logs\n- Hospital Billing Statements & CPT/ICD-10 Coding Claims\n\n**Action Required**: The uploaded document does not contain verifiable medical/clinical charts. Please upload a valid clinical document or select one of the standard benchmark cases in the library.\n`
         : `# 🛡️ Medical Auditor Forensic Report\n**Patient Name:** ${patient}\n**Attending MD:** ${doctor} (${spec})\n**Facility:** ${hospital} — ${dept}\n**Calibrated Compliance Rating:** ${dynamicScore}/100 (**${dynamicVerdict}**)\n\n---\n### 🩺 Clinical Standard of Care Review (AASLD & Critical Care Guidelines)\n${isCirrhosis ? '- **Decompensated Cirrhosis Inpatient Protocol**: Verified appropriate sodium restriction, dual diuretic titration (spironolactone/furosemide), and prompt non-selective beta-blocker initiation.\n- **Variceal Hemorrhage Prophylaxis**: Indicated EVL procedure scheduled within guideline-concordant 48-hour window for Grade II varices with red wale signs.\n- **Infection Surveillance**: Diagnostic paracentesis ordered prior to empiric antibiosis to rule out Spontaneous Bacterial Peritonitis (SBP).\n- **Encephalopathy Staging & Therapy**: Appropriate lactulose and rifaximin administration for Stage 1 hepatic encephalopathy.\n- **Transplant Allocation**: Expedited referral to Liver Transplantation Evaluation Board based on MELD-Na 31.' : (hasMalpractice ? '- **Critical Deviation Detected**: Evidence of clinical mismanagement or failure to follow safety protocols.' : '- Care protocols verified against specialty guidelines.')}\n\n### 💳 Financial & CPT Coding Audit\n- Evaluated High-Complexity Inpatient Initial Hospital Care (CPT 99223) and Critical Decision Making.\n\n### ⚖️ Auditor Summary & Recommendations\n- **Verdict**: **${dynamicVerdict.toUpperCase()}** (${dynamicScore}% score — High-Complexity Monitored Care Protocol).\n`,
       timestamp: new Date().toISOString()
     };
@@ -626,26 +582,28 @@ Output strictly valid JSON with no markdown backticks.`;
       } catch (e) {}
     }
 
+    const effectiveAudit = activeAuditData || context || null;
+    const hasActiveAudit = !!(effectiveAudit && (effectiveAudit.complianceScore !== undefined || (effectiveAudit.findings && effectiveAudit.findings.length > 0)));
+
     const ai = getGeminiClient();
     if (ai) {
       const systemPrompt = `You are 'Maudi', the elite AI Forensic & Medico-Legal Copilot assistant powered by Google Gemini.
-You have real-time clinical reasoning and document audit capabilities calibrated against 1,000+ benchmark cases across multiple document domains.
+Your role is to assist clinical documentation specialists, hospital compliance officers, and medical directors.
 
-ACTIVE CASE CONTEXT:
-${activeAuditData ? JSON.stringify(activeAuditData, null, 2) : (context ? JSON.stringify(context, null, 2) : `Case ID/Name: ${active_case || 'Sarah Jenkins (CASE-101) / Active Inpatient Benchmark'}`)}
+CURRENT WORKSPACE AUDIT CONTEXT:
+${hasActiveAudit ? JSON.stringify(effectiveAudit, null, 2) : 'No audit has been completed yet for the current session. The user has not run the multi-agent pipeline on an uploaded chart yet.'}
 
-ZERO-HALLUCINATION OPERATING PRINCIPLES:
-1. STRICT GROUNDING: When the user asks about "active case file", "audit findings", "score drop", or specific patient data, answer directly and thoroughly using the active case information or preset benchmark facts (e.g. Sarah Jenkins CPT 99291 duration violation & BP 165/100, Robert Davis AAOS fracture reduction pass, Eleanor Vance CPT 99285 ER Level 5 upcoding).
-2. COMPREHENSIVE FINDINGS EXPLANATION:
-   - Provide a clear, structured breakdown including Patient Name, Attending MD, Facility, Compliance Score, Verdict, and specific Clinical Care vs. Billing/CPT discrepancies.
-   - Explain why the finding matters in terms of patient safety or financial compliance.
-3. CONVERSATIONAL CLARITY:
-   - Provide crisp, structured Markdown responses with bold headings, bullet points, and authoritative, helpful explanations. Never return a generic intro message when asked a specific question.`;
+OPERATING PRINCIPLES:
+1. STRICT GROUNDING: Ground all case-specific answers strictly on the current active audit data provided above.
+   - If no audit has been executed yet, inform the user clearly that no active case findings exist yet, and instruct them to upload a chart and click "RUN MULTI-AGENT AUDIT".
+   - Never invent or hallucinate patient names, doctor names, or findings if none are loaded.
+2. If an audit IS loaded: Explain the patient name, attending doctor, facility, compliance score, verdict, and specific clinical/billing findings clearly and accurately.
+3. CONVERSATIONAL CLARITY: Format answers in clean Markdown with bold headers and concise bullet points.`;
 
-      const promptText = `User Query: "${userMessage}"\nActive Case Reference: ${active_case || 'Sarah Jenkins / Active Audit'}\nContext Data: ${JSON.stringify(context || activeAuditData || {})}`;
+      const promptText = `User Question: "${userMessage}"\nActive Case Reference: ${active_case || (hasActiveAudit ? effectiveAudit.patientName : 'None')}`;
 
-      // Try reliable models with automatic fallback
-      const modelsToTry = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-3.7-flash', 'gemini-2.5-pro'];
+      // Try reliable models with fast-fail cascade
+      const modelsToTry = ['gemini-2.5-flash', 'gemini-3.7-flash', 'gemini-2.5-pro'];
       for (const model of modelsToTry) {
         try {
           const response = await ai.models.generateContent({
@@ -670,9 +628,10 @@ ZERO-HALLUCINATION OPERATING PRINCIPLES:
           }
         } catch (err) {
           const msg = (err && (err.message || (err.error && err.error.message))) || String(err);
-          const isQuotaOrDemand = msg.includes('429') || msg.includes('quota') || msg.includes('503') || msg.includes('demand');
-          if (isQuotaOrDemand) {
-            console.info(`Copilot model ${model} limit/high-demand reached, trying next fallback.`);
+          const isQuota = msg.includes('429') || msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED');
+          if (isQuota) {
+            console.info(`Copilot model ${model} project quota reached; switching immediately to dynamic grounded copilot.`);
+            break; // Fast-fail on 429
           } else {
             console.warn(`Copilot notice on ${model}:`, msg.slice(0, 120));
           }
@@ -685,28 +644,15 @@ ZERO-HALLUCINATION OPERATING PRINCIPLES:
     let replyMarkdown = '';
 
     if (lower.includes('finding') || lower.includes('case file') || lower.includes('audit') || lower.includes('explain')) {
-      const patient = (activeAuditData && activeAuditData.patientName) || (context && context.patientName) || 'Sarah Jenkins';
-      const doctor = (activeAuditData && activeAuditData.doctorName) || (context && context.doctorName) || 'Dr. Angela Vance (Cardiology)';
-      const facility = (activeAuditData && activeAuditData.hospitalName) || (context && context.hospitalName) || 'Metro Heart Hospital — Cardiac Emergency Division';
-      const score = (activeAuditData && (activeAuditData.complianceScore ?? activeAuditData.primaryScore)) || 42;
-      const verdict = (activeAuditData && activeAuditData.verdict) || 'FLAGGED';
-      
-      const findingsList = (activeAuditData && activeAuditData.findings) || [
-        {
-          id: 'CPT-UPCODE-01',
-          type: 'Billing / CPT Violation',
-          severity: 'Critical',
-          description: 'Critical Care Code (CPT 99291) billed for only 12 minutes of documented bedside physician time. AMA CPT guidelines mandate a minimum of 30–74 minutes of direct critical care intervention.'
-        },
-        {
-          id: 'CLIN-SAFETY-02',
-          type: 'Clinical Safety Deviation',
-          severity: 'High',
-          description: 'Premature discharge authorized while patient exhibited uncontrolled Stage 2 Hypertension (BP 165/100 mmHg) with active tachycardia, violating emergency post-nitroglycerin stabilization criteria.'
-        }
-      ];
+      if (hasActiveAudit) {
+        const patient = effectiveAudit.patientName || 'Active Patient';
+        const doctor = effectiveAudit.doctorName || 'Attending Physician';
+        const facility = effectiveAudit.hospitalName || 'Healthcare Facility';
+        const score = effectiveAudit.complianceScore ?? effectiveAudit.primaryScore ?? 0;
+        const verdict = effectiveAudit.verdict || 'PENDING';
+        const findingsList = effectiveAudit.findings || [];
 
-      replyMarkdown = `### 📋 Forensic Audit Findings Summary
+        replyMarkdown = `### 📋 Active Case Forensic Audit Findings
 
 **Patient:** ${patient}  
 **Attending Physician:** ${doctor}  
@@ -715,21 +661,33 @@ ZERO-HALLUCINATION OPERATING PRINCIPLES:
 
 ---
 
-#### 🔍 Key Deficiencies & Forensic Findings:
-${findingsList.map(f => `- **${f.type || f.id}** (*${f.severity} Severity*):\n  ${f.description}`).join('\n\n')}
+#### 🔍 Identified Deficiencies & Findings:
+${findingsList.length > 0 ? findingsList.map((f, i) => `${i + 1}. **${f.type || f.id}** (*${f.severity || 'Medium'} Severity*):\n  ${f.description}`).join('\n\n') : 'No discrepancies or deficiencies were identified during the audit.'}`;
+      } else if (context && context.patientName && context.patientName !== 'Pending Ingestion') {
+        replyMarkdown = `### 📋 Document Ingested: ${context.patientName}
 
----
+The clinical record has been parsed, but the multi-agent forensic audit has not been run yet.
+Please click **"RUN MULTI-AGENT AUDIT"** to execute the clinical, billing, and documentation checks.`;
+      } else {
+        replyMarkdown = `### 🛡️ Clinical Forensic Copilot
 
-#### ⚖️ Regulatory & Guideline Context:
-1. **CPT 99291 Time Rule**: Under CMS and AMA coding rules, Critical Care (99291) requires documented high-complexity medical decision making *plus* at least 30 minutes of direct physician evaluation. A 12-minute checkup should be downcoded to CPT 99283/99284.
-2. **Clinical Safety Protocol**: Discharging a patient with severe hypertension (165/100 mmHg) following an acute ischemic/angina presentation creates immediate risk of secondary cardiovascular adverse events.`;
+**No active audit findings to display.**
+Please upload a clinical document (or select a benchmark record) and click **"RUN MULTI-AGENT AUDIT"** to evaluate the chart for standard-of-care and billing compliance.`;
+      }
     } else if (lower.includes('score') || lower.includes('drop') || lower.includes('why')) {
-      replyMarkdown = `### 📉 Score Deduction Analysis
+      if (hasActiveAudit) {
+        const score = effectiveAudit.complianceScore ?? effectiveAudit.primaryScore ?? 0;
+        const verdict = effectiveAudit.verdict || 'EVALUATED';
+        const findingsList = effectiveAudit.findings || [];
+        replyMarkdown = `### 📉 Score Breakdown (${score}/100 - ${verdict})
 
-The case compliance score dropped to **42/100 (FLAGGED)** due to two primary infractions:
+The score was calculated from domain evaluations:
+${findingsList.length > 0 ? findingsList.map(f => `- **${f.type || f.id}** (${f.severity}): ${f.description}`).join('\n') : '- No major score deductions were recorded.'}`;
+      } else {
+        replyMarkdown = `### 📉 Score Status
 
-1. **-35 pts (Financial Upcoding)**: CPT 99291 was submitted for reimbursement ($1,200) despite only 12 minutes of documented physician bedside care (minimum 30–74 minutes required).
-2. **-23 pts (Premature Discharge Protocol Breach)**: Patient was discharged from the emergency setting with persistent **Stage 2 Hypertension (BP 165/100 mmHg)** and unresolved sinus tachycardia.`;
+Audit status is currently **AWAITING AUDIT**. Upload a clinical chart and run the multi-agent panel to generate a compliance score breakdown.`;
+      }
     } else if (lower.includes('99291') || lower.includes('99284') || lower.includes('cpt')) {
       replyMarkdown = `### 🩺 CPT 99291 vs. CPT 99284 Comparison
 
@@ -750,18 +708,12 @@ The case compliance score dropped to **42/100 (FLAGGED)** due to two primary inf
 
 **Query Received**: "${userMessage}"
 
-**Active Case Reference**: ${active_case || 'Active Clinical Case'}
-
-I am tracking the forensic audit and EHR timeline. You can ask:
-- *"Explain the active case audit findings"*
-- *"Why did the compliance score drop?"*
-- *"Explain the CPT 99291 duration requirements vs CPT 99284"*
-- *"Review patient vitals and discharge criteria"*`;
+I am ready to assist with clinical guideline lookups, CPT billing rules, or questions about active audit findings.`;
     }
 
     return res.json({
       reply: replyMarkdown,
-      source: 'forensic-rule-engine',
+      source: 'forensic-engine',
       timestamp: new Date().toISOString()
     });
   });

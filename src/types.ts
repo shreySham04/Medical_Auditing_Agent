@@ -1,3 +1,55 @@
+export interface DeterministicRuleCheck {
+  rule_id: string;
+  rule_name: string;
+  authority: string;
+  citation_code: string;
+  expected_constraint: string;
+  observed_fact: string;
+  status: 'PASSED' | 'VIOLATED' | 'INCONCLUSIVE';
+  severity: 'Low' | 'Medium' | 'High' | 'Critical';
+  penalty_score: number;
+  reproducible_rule_logic: string;
+}
+
+export interface CrossAgentDisagreement {
+  topic: string;
+  agents_involved: string[];
+  severity_disparity: string;
+  clinical_stance: string;
+  billing_stance: string;
+  resolution_applied: string;
+  confidence_impact: number;
+}
+
+export interface VerifierPassFinding {
+  finding_id: string;
+  original_claim: string;
+  cited_quote_or_metric: string;
+  source_text_matched: boolean;
+  grounding_confidence: number;
+  verification_status: 'VERIFIED' | 'HALLUCINATION_REJECTED' | 'MODIFIED_FOR_ACCURACY' | 'UPHELD_DETERMINISTIC';
+  verification_notes: string;
+}
+
+export interface PromptInjectionScanResult {
+  is_injection_detected: boolean;
+  risk_level: 'SAFE' | 'SUSPICIOUS' | 'CRITICAL_ADVERSARIAL';
+  matched_patterns: string[];
+  sanitized_text_applied: boolean;
+  injection_defense_rationale: string;
+}
+
+export interface AuditTraceManifest {
+  trace_id: string;
+  timestamp: string;
+  sha256_bundle_hash: string;
+  input_text_hash: string;
+  rules_hash: string;
+  agents_dag_hash: string;
+  execution_steps: { step: number; name: string; status: string; duration_ms: number }[];
+  reproducibility_token: string;
+}
+
 export interface FindingItem {
   id?: string;
   type?: string;
@@ -5,6 +57,20 @@ export interface FindingItem {
   severity?: 'Low' | 'Medium' | 'High' | 'Critical' | string;
   finding?: string;
   text?: string;
+  official_document?: string;
+  officialDocument?: string;
+  citation_code?: string;
+  citationCode?: string;
+  official_citation_text?: string;
+  officialCitationText?: string;
+  document_evidence?: string;
+  documentEvidence?: string;
+  human_readable_explanation?: string;
+  humanReadableExplanation?: string;
+  is_suppressed_by_calibration?: boolean;
+  calibration_rationale?: string;
+  verification_status?: string;
+  deterministic_rule_id?: string;
 }
 
 export interface ExplainedTerm {
@@ -30,16 +96,27 @@ export interface AuditRecord {
   compliance_rating?: number;
   complianceScore?: number;
   primaryScore?: number;
+  rawScore?: number;
   clinicalScore?: number;
   billingScore?: number;
   documentationScore?: number;
   timelineScore?: number;
+  consensusIndex?: number;
   clinicalGrade?: string;
   billingGrade?: string;
-  risk_classification?: 'Low' | 'Medium' | 'High' | 'Critical';
-  riskClassification?: 'Low' | 'Medium' | 'High' | 'Critical';
-  verdict: 'Compliant' | 'Flagged' | 'Failed' | 'Pass' | string;
+  risk_classification?: 'Low' | 'Medium' | 'High' | 'Critical' | string;
+  riskClassification?: 'Low' | 'Medium' | 'High' | 'Critical' | 'STANDARD_MONITORING' | 'HIGH_COMPLEXITY_MONITORED' | 'CRITICAL_DEFICIENCY' | string;
+  verdict: 'Compliant' | 'Flagged' | 'Failed' | 'Pass' | 'INSUFFICIENT_EVIDENCE' | string;
   findings?: (string | FindingItem)[];
+  suppressed_false_positives?: FindingItem[];
+  deterministic_rules?: DeterministicRuleCheck[];
+  cross_agent_disagreements?: CrossAgentDisagreement[];
+  verifier_pass_logs?: VerifierPassFinding[];
+  prompt_injection_scan?: PromptInjectionScanResult;
+  trace_manifest?: AuditTraceManifest;
+  is_insufficient_evidence?: boolean;
+  missing_prerequisites?: string[];
+  required_actions?: string[];
   report_markdown?: string;
   reportMarkdown?: string;
   explainedTerms?: ExplainedTerm[];
@@ -49,11 +126,7 @@ export interface AuditRecord {
     medications?: string[];
     actionItems?: string[];
   };
-  evidenceLocker?: {
-    billedCodes?: { code: string; desc: string; fee: string; justified: boolean }[];
-    clinicalDeviations?: string[];
-    doctorTimestampLogs?: string[];
-  };
+  reconstructed_timeline?: string[];
   fileName?: string;
   savedPath?: string;
 }
@@ -63,19 +136,60 @@ export interface TrainingSample {
   id?: string;
   specialty?: string;
   topic?: string;
+  topicCode?: string;
+  title?: string;
+  patient_name?: string;
+  patientName?: string;
+  doctor_name?: string;
+  doctorName?: string;
+  hospital_name?: string;
+  record_text?: string;
+  recordText?: string;
   cpt_billed?: string;
   cptBilled?: string;
   cpt_justified?: string;
   cptRecommended?: string;
   upcoding_detected?: boolean;
   upcodingDetected?: boolean;
+  clinical_violation?: boolean;
+  billing_violation?: boolean;
   negligence_flag?: boolean;
   audit_score?: number;
   complianceScore?: number;
+  expected_score?: number;
+  expectedScore?: number;
+  verdict?: string;
+  expected_verdict?: string;
+  severity?: 'Low' | 'Medium' | 'High' | 'Critical' | string;
+  expected_severity?: string;
+  violation_description?: string;
   summary?: string;
   reasoning?: string;
-  recordText?: string;
-  title?: string;
+  evidence_citation?: string;
+  evidenceCitation?: string;
+  human_explanation?: string;
+  humanExplanation?: string;
+  is_adversarial_injection?: boolean;
+  is_truncated_incomplete?: boolean;
+}
+
+export interface EvaluationMetricsData {
+  total_cases: number;
+  true_positives: number;
+  false_positives: number;
+  true_negatives: number;
+  false_negatives: number;
+  precision: number;
+  recall: number;
+  f1_score: number;
+  false_positive_rate: number;
+  false_negative_rate: number;
+  accuracy: number;
+  expected_calibration_error: number;
+  brier_score: number;
+  score_mae: number;
+  insufficient_evidence_detection_rate: number;
+  prompt_injection_defense_rate: number;
 }
 
 export interface Complaint {
@@ -103,7 +217,7 @@ export interface ClinicianParams {
   department: string;
 }
 
-export type PipelineStageStatus = 'awaiting' | 'pending' | 'running' | 'completed';
+export type PipelineStageStatus = 'awaiting' | 'pending' | 'running' | 'completed' | 'error';
 
 export interface PipelineStage {
   id: string;

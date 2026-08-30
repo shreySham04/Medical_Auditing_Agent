@@ -10,6 +10,7 @@ import { InteractiveCopilotSidebar } from './components/InteractiveCopilotSideba
 import { ComplaintQueue } from './components/ComplaintQueue';
 import { AnalyticsRegistryView } from './components/AnalyticsRegistryView';
 import { SystemGuideView } from './components/SystemGuideView';
+import { DatasetView } from './components/DatasetView';
 import { StatusBar } from './components/StatusBar';
 import { SampleSelectorModal, PRESET_SAMPLE_CASES, SampleCase } from './components/SampleSelectorModal';
 import {
@@ -18,6 +19,7 @@ import {
   PipelineStage,
   ChatMessage,
   Complaint,
+  TrainingSample,
 } from './types';
 
 const INITIAL_COMPLAINTS: Complaint[] = [
@@ -150,10 +152,12 @@ export default function App() {
   const [isRunningAudit, setIsRunningAudit] = useState<boolean>(false);
 
   // Inspector Tabs
-  const [inspectorTab, setInspectorTab] = useState<'report' | 'translator' | 'evidence' | 'terms'>('report');
+  const [inspectorTab, setInspectorTab] = useState<'report' | 'evidence' | 'deterministic' | 'verification' | 'trace' | 'translator'>('report');
 
   // Copilot Chat Drawer State (Ask Gemini Style)
-  const [isCopilotOpen, setIsCopilotOpen] = useState<boolean>(true);
+  // [TEMPORARILY SUSPENDED]: Set to true to suspend/hide chatbot UI without deleting any code
+  const IS_CHATBOT_SUSPENDED = true;
+  const [isCopilotOpen, setIsCopilotOpen] = useState<boolean>(false);
   const [copilotMessages, setCopilotMessages] = useState<ChatMessage[]>([INITIAL_COPILOT_MESSAGE]);
   const [isCopilotLoading, setIsCopilotLoading] = useState<boolean>(false);
 
@@ -165,10 +169,30 @@ export default function App() {
   // Modal
   const [isSampleModalOpen, setIsSampleModalOpen] = useState<boolean>(false);
 
-  // Initial Fetch of Audits
+  // Synthetic Benchmark Samples
+  const [benchmarkSamples, setBenchmarkSamples] = useState<TrainingSample[]>([]);
+  const [benchmarkCount, setBenchmarkCount] = useState<number>(200);
+
+  // Initial Fetch of Audits & Benchmark Cases
   useEffect(() => {
     fetchAudits();
+    fetchBenchmark();
   }, []);
+
+  const fetchBenchmark = async () => {
+    try {
+      const res = await fetch('/api/training');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.samples && Array.isArray(data.samples)) {
+          setBenchmarkSamples(data.samples);
+          setBenchmarkCount(data.total_samples || data.samples.length);
+        }
+      }
+    } catch (err) {
+      console.warn('Benchmark fetch notice:', err);
+    }
+  };
 
   const handleAddComplaint = async (complaintData: Partial<Complaint>) => {
     setIsComplaintLoading(true);
@@ -365,23 +389,43 @@ export default function App() {
 
           setLoadedRawRecordText(docData.extracted_text || `Clinical Report: ${file.name}`);
 
-          setPipelineStages((prev) =>
-            prev.map((stage, idx) => {
-              if (idx === 0) {
-                return { ...stage, status: 'completed', statusLabel: 'AUTO-PARSED' };
-              }
-              return { ...stage, status: 'pending', statusLabel: 'STANDBY' };
-            })
-          );
+          if (docData.is_non_clinical) {
+            setScore(0);
+            setVerdict('REJECTED (NON-CLINICAL)');
+            setPipelineStages((prev) =>
+              prev.map((stage, idx) => {
+                if (idx === 0) {
+                  return { ...stage, status: 'error', statusLabel: 'REJECTED' };
+                }
+                return { ...stage, status: 'pending', statusLabel: 'BLOCKED' };
+              })
+            );
+            setSystemStatus(
+              `⚠️ Non-Clinical Document Detected: ${docData.specialization || 'Invalid Type'}. Please upload clinical EHR or billing records.`
+            );
+          } else {
+            setPipelineStages((prev) =>
+              prev.map((stage, idx) => {
+                if (idx === 0) {
+                  return { ...stage, status: 'completed', statusLabel: 'AUTO-PARSED' };
+                }
+                return { ...stage, status: 'pending', statusLabel: 'STANDBY' };
+              })
+            );
 
-          setSystemStatus(
-            `Extracted: ${docData.doctor_name || 'Physician'} (${docData.specialization || 'Clinical'}) — ${docData.hospital_name || 'Hospital'}. Ready for audit.`
-          );
+            const displayDoc = docData.doctor_name || 'Physician';
+            const displaySpec = docData.specialization || 'Clinical';
+            const displayHosp = docData.hospital_name || 'Hospital';
+            setSystemStatus(
+              `Extracted: ${displayDoc} (${displaySpec}) — ${displayHosp}. Ready for audit.`
+            );
+          }
         } else {
           throw new Error('Document analysis failed');
         }
       } catch (err) {
         console.warn('Document analysis fallback notice:', err);
+        const shortName = file.name.length > 30 ? `${file.name.slice(0, 27)}...` : file.name;
         const derivedName = file.name.replace(/\.[^/.]+$/, '').replace(/[_\-]/g, ' ');
         setPatientName(derivedName);
         setClinicianParams({
@@ -398,7 +442,7 @@ export default function App() {
             return { ...stage, status: 'pending', statusLabel: 'STANDBY' };
           })
         );
-        setSystemStatus(`Ingested "${file.name}". Ready to run multi-agent forensic audit.`);
+        setSystemStatus(`Ingested "${shortName}". Ready to run multi-agent forensic audit.`);
       }
 
       setScore(0);
@@ -435,7 +479,8 @@ export default function App() {
     const recordContent = loadedRawRecordText || `Clinical case evaluation for ${effectivePatient}.`;
 
     try {
-      // Launch the backend audit promise
+      // Launch the backend audit promise - Text-First token optimization
+      const needsBase64Fallback = !recordContent || recordContent.length < 50;
       const auditFetchPromise = fetch('/api/reaudit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -447,7 +492,7 @@ export default function App() {
           specialization: clinicianParams.specialization,
           department: clinicianParams.department,
           record_text: recordContent,
-          file_base64: loadedFileBase64 || undefined,
+          file_base64: needsBase64Fallback ? (loadedFileBase64 || undefined) : undefined,
           file_type: loadedFileType || undefined,
         }),
       });
@@ -560,34 +605,23 @@ export default function App() {
     setSystemStatus(`Copilot querying clinical knowledge base for: "${text.slice(0, 35)}..."`);
 
     try {
+      const activeContext = activeAudit ? activeAudit : (patientName ? {
+        patientName: patientName,
+        doctorName: clinicianParams.doctorName,
+        hospitalName: clinicianParams.hospitalName,
+        specialization: clinicianParams.specialization,
+        complianceScore: score,
+        verdict: verdict,
+        findings: []
+      } : null);
+
       const res = await fetch('/api/copilot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: text,
-          active_case: activeAudit ? activeAudit.id : (selectedAuditId || 'Sarah Jenkins'),
-          context: activeAudit || {
-            patientName: patientName || 'Sarah Jenkins',
-            doctorName: clinicianParams.doctorName || 'Dr. Angela Vance',
-            hospitalName: clinicianParams.hospitalName || 'Metro Heart Hospital',
-            specialization: clinicianParams.specialization || 'Cardiology',
-            complianceScore: score || 42,
-            verdict: verdict || 'FLAGGED',
-            findings: [
-              {
-                id: 'CPT-UPCODE-01',
-                type: 'Billing / CPT Violation',
-                severity: 'Critical',
-                description: 'Critical Care Code (CPT 99291) billed for 12-minute checkup (minimum 30–74 minutes required).'
-              },
-              {
-                id: 'CLIN-SAFETY-02',
-                type: 'Clinical Safety Deviation',
-                severity: 'High',
-                description: 'Patient discharged with uncontrolled Stage 2 Hypertension (165/100 mmHg) and active tachycardia.'
-              }
-            ]
-          }
+          active_case: activeAudit ? activeAudit.id : (selectedAuditId || null),
+          context: activeContext
         }),
       });
 
@@ -605,16 +639,35 @@ export default function App() {
         throw new Error('API query failed');
       }
     } catch {
-      // Contextual fallback response
-      let fallbackText = `### 🛡️ Clinical Forensic Copilot Response\n\n`;
-      if (text.toLowerCase().includes('finding') || text.toLowerCase().includes('case') || text.toLowerCase().includes('audit')) {
-        fallbackText += `**Active Case: Sarah Jenkins (Cardiology Emergency)**\n- **Score**: 42/100 (FLAGGED)\n- **Billing Finding**: CPT 99291 ($1,200) was billed despite only 12 minutes of documented physician care (violates CMS 30-min minimum).\n- **Clinical Finding**: Discharged with unresolved Stage 2 Hypertension (BP 165/100 mmHg).`;
-      } else if (text.toLowerCase().includes('cold') || text.toLowerCase().includes('cough') || text.toLowerCase().includes('remed')) {
+      // Fully dynamic fallback response based on real state
+      let fallbackText = `### 🛡️ Clinical Forensic Copilot\n\n`;
+      const lower = text.toLowerCase();
+
+      if (lower.includes('finding') || lower.includes('case') || lower.includes('audit')) {
+        if (activeAudit && activeAudit.findings && activeAudit.findings.length > 0) {
+          fallbackText += `**Active Case: ${activeAudit.patientName || patientName || 'Current Record'}**\n`;
+          fallbackText += `- **Score**: ${activeAudit.complianceScore || score}/100 (${activeAudit.verdict || verdict})\n`;
+          fallbackText += `- **Attending MD**: ${activeAudit.doctorName || clinicianParams.doctorName || 'N/A'}\n`;
+          fallbackText += `- **Facility**: ${activeAudit.hospitalName || clinicianParams.hospitalName || 'N/A'}\n\n`;
+          fallbackText += `**Key Findings:**\n`;
+          activeAudit.findings.forEach((f: any, idx: number) => {
+            fallbackText += `${idx + 1}. **${f.type || f.id}** (${f.severity} severity): ${f.description}\n`;
+          });
+        } else if (patientName) {
+          fallbackText += `**Current Document: ${patientName}**\n\nThe document has been ingested but the multi-agent audit has not completed yet. Click **"RUN MULTI-AGENT AUDIT"** to generate forensic findings.`;
+        } else {
+          fallbackText += `No clinical record is currently loaded. Please upload an EHR document or select a sample case, then run the audit to generate real-time findings.`;
+        }
+      } else if (lower.includes('score') || lower.includes('drop')) {
+        if (activeAudit) {
+          fallbackText += `The compliance rating of **${activeAudit.complianceScore || score}/100** (${activeAudit.verdict || verdict}) was calculated from domain evaluations across Clinical Protocol, Billing/CPT coding, and Documentation completeness.`;
+        } else {
+          fallbackText += `Audit status is currently **AWAITING AUDIT**. Run an audit on an uploaded clinical chart to view score breakdowns.`;
+        }
+      } else if (lower.includes('cold') || lower.includes('cough') || lower.includes('remed')) {
         fallbackText += `For uncomplicated viral upper respiratory tract infections (common cold, mild cough), clinical guidelines recommend:\n\n1. **Supportive Care**: High oral hydration, warm saline gargles, honey (for cough in adults), and humidification.\n2. **OTC Symptomatic Relief**: Acetaminophen or Ibuprofen for fever/myalgia; first-generation antihistamines or decongestants as appropriate.\n3. **Red Flags**: High fever >3 days, hemoptysis, or dyspnea require immediate in-person physician evaluation.`;
-      } else if (text.toLowerCase().includes('score') || text.toLowerCase().includes('drop')) {
-        fallbackText += `The compliance rating was reduced due to **billing upcoding** (CPT 99291 claimed without documented 30+ minutes duration) and **premature clinical discharge** with uncontrolled Stage 2 Hypertension.`;
       } else {
-        fallbackText += `Multi-agent forensic engine evaluated query: "${text}". Real-time cross references to AMA CPT guidelines and clinical care standards confirm active calibration.`;
+        fallbackText += `Forensic Copilot is ready. You can upload a clinical record and ask questions regarding CPT coding, standard-of-care guidelines, or active case findings.`;
       }
 
       const copilotMsg: ChatMessage = {
@@ -701,8 +754,8 @@ export default function App() {
             </div>
           </main>
 
-          {/* RIGHT COLUMN: Interactive Audit Copilot (Ask Gemini style drawer) */}
-          {isCopilotOpen && (
+          {/* RIGHT COLUMN: Interactive Audit Copilot (Ask Gemini style drawer) - Suspended for the time being */}
+          {!IS_CHATBOT_SUSPENDED && isCopilotOpen && (
             <InteractiveCopilotSidebar
               messages={copilotMessages}
               onSendMessage={handleSendMessage}
@@ -711,8 +764,8 @@ export default function App() {
             />
           )}
 
-          {/* Floating "✦ ASK MAUDI" Trigger Button when Drawer is Closed */}
-          {!isCopilotOpen && (
+          {/* Floating "✦ ASK MAUDI" Trigger Button when Drawer is Closed - Suspended for the time being */}
+          {!IS_CHATBOT_SUSPENDED && !isCopilotOpen && (
             <button
               type="button"
               onClick={() => setIsCopilotOpen(true)}
@@ -724,6 +777,10 @@ export default function App() {
               <span className="w-2 h-2 rounded-full bg-[#00e676] shadow-[0_0_6px_#00e676]" />
             </button>
           )}
+        </div>
+      ) : mainTab === 'dataset' ? (
+        <div className="flex-1 overflow-y-auto p-6 bg-[#090d16]">
+          <DatasetView samples={benchmarkSamples} totalCount={benchmarkCount} />
         </div>
       ) : mainTab === 'queue' ? (
         <div className="flex-1 overflow-y-auto p-6 bg-[#090d16]">

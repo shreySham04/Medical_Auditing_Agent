@@ -94,20 +94,6 @@ async def run_documentation_agent(record_text: str) -> dict:
                 if part.text:
                     result_text += part.text
                     
-    import re
-    json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
-    if json_match:
-        try:
-            return json.loads(json_match.group())
-        except Exception:
-            pass
-            
-    return {
-        "agent_name": "Documentation Agent",
-        "documentation_score": 85,
-        "documentation_grade": "B",
-        "signature_validated": True,
-        "missing_required_fields": [],
-        "present_elements": ["Standard metadata validated"],
-        "documentation_critique": result_text or "Standard checklist applied."
-    }
+    from core.parser import validate_documentation_output
+    parsed_output = validate_documentation_output(result_text)
+    return parsed_output.to_dict()

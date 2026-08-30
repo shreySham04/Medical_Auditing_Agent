@@ -110,19 +110,6 @@ async def run_timeline_agent(record_text: str) -> dict:
                 if part.text:
                     result_text += part.text
                     
-    import re
-    json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
-    if json_match:
-        try:
-            return json.loads(json_match.group())
-        except Exception:
-            pass
-            
-    return {
-        "agent_name": "Timeline Agent",
-        "timeline_score": 85,
-        "timeline_grade": "B",
-        "reconstructed_timeline": [{"time": "09:00 AM", "event": "Ingested clinic note"}],
-        "timeline_inconsistencies": [],
-        "temporal_critique": result_text or "Standard timeline checklist complete."
-    }
+    from core.parser import validate_timeline_output
+    parsed_output = validate_timeline_output(result_text)
+    return parsed_output.to_dict()

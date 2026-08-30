@@ -53,11 +53,11 @@ export const ForensicInvestigator: React.FC<ForensicInvestigatorProps> = ({
 
   const agentWorkflow = [
     { name: 'Document Agent', icon: FileText, desc: 'Extracts structured EHR, operative notes, & billing items', color: 'text-blue-400 border-blue-500/30 bg-blue-500/10' },
-    { name: 'Clinical Agent', icon: Stethoscope, desc: 'Validates diagnoses against clinical practice guidelines', color: 'text-purple-400 border-purple-500/30 bg-purple-500/10' },
-    { name: 'Billing Agent', icon: DollarSign, desc: 'Detects CPT upcoding & unbundled billing items', color: 'text-amber-400 border-amber-500/30 bg-amber-500/10' },
-    { name: 'Documentation Agent', icon: FileText, desc: 'Audits missing signatures & clinical justification gaps', color: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10' },
-    { name: 'Timeline Agent', icon: Clock, desc: 'Checks event sequence consistency & timestamp anomalies', color: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' },
-    { name: 'Supervisor Agent', icon: ShieldAlert, desc: 'Synthesizes agent outputs & issues final compliance verdict', color: 'text-rose-400 border-rose-500/30 bg-rose-500/10' }
+    { name: 'Clinical Agent', icon: Stethoscope, desc: 'Validates clinical management against official specialty guidelines', color: 'text-purple-400 border-purple-500/30 bg-purple-500/10' },
+    { name: 'Billing Agent', icon: DollarSign, desc: 'Audits CPT codes, modifiers, and unbundled charges against CMS/AMA rules', color: 'text-amber-400 border-amber-500/30 bg-amber-500/10' },
+    { name: 'Documentation Agent', icon: FileText, desc: 'Audits signatures, physician attestations, and documentation gaps', color: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10' },
+    { name: 'Timeline Agent', icon: Clock, desc: 'Reconstructs event chronology and detects timestamp anomalies', color: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' },
+    { name: 'Referee Agent', icon: ShieldAlert, desc: 'Binds findings to official citations & applies human-feedback calibration', color: 'text-rose-400 border-rose-500/30 bg-rose-500/10' }
   ];
 
   const getVerdictBadge = (verdict: string) => {
