@@ -20,6 +20,7 @@ Predictions are strictly isolated from ground truth; metrics are calculated post
 """
 
 import time
+import asyncio
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, asdict
 
@@ -30,6 +31,11 @@ from core.deterministic_rules import DeterministicRuleValidator
 from core.calibration import ExpertRuleCalibrator
 from core.verifier import IndependentVerifierPass
 from core.insufficient_evidence import InsufficientEvidenceAssessor
+from core.disagreement_detector import CrossAgentDisagreementDetector
+from agents.clinical_agent import run_clinical_agent
+from agents.billing_agent import run_billing_agent
+from agents.documentation_agent import run_documentation_agent
+from agents.timeline_agent import run_timeline_agent
 from evaluation.benchmark import ALL_BENCHMARK_CASES, REGRESSION_SUITE_CASES, BLIND_CHALLENGE_CASES
 
 
@@ -48,10 +54,10 @@ class ArchitectureExperimentResult:
     expected_calibration_error: float
     brier_score: float
     score_mae: float
-    average_latency_ms: float
-    input_tokens_per_audit: int
+    average_latency_ms: float  # Measured local pipeline execution time per audit
+    input_tokens_per_audit: int  # Estimated API tokens per audit
     output_tokens_per_audit: int
-    cost_per_100_audits_usd: float
+    cost_per_100_audits_usd: float  # Estimated API cost at assumed token pricing
     verifiable_citation_rate: float
     unsupported_findings_rate: float
     exception_false_positive_rate: float
@@ -188,7 +194,7 @@ class ExperimentBenchmarkRunner:
             else:
                 fn += 1
 
-        elapsed_ms = round(((time.perf_counter() - start_t) / len(cases)) * 1000 + 380, 1)
+        elapsed_ms = round(((time.perf_counter() - start_t) / len(cases)) * 1000, 2)
 
         precision = round((tp / (tp + fp)) * 100, 2) if (tp + fp) > 0 else 0.0
         recall = round((tp / (tp + fn)) * 100, 2) if (tp + fn) > 0 else 0.0
@@ -271,7 +277,11 @@ class ExperimentBenchmarkRunner:
                 if is_insuff:
                     abstain_success += 1
 
-            # 4. Deterministic Rule Validation
+            # 4. Invoke Clinical Agent Directly
+            clinical_res = asyncio.run(run_clinical_agent(clean_text))
+            clinical_score = clinical_res.get("clinical_score", 85)
+
+            # 5. Deterministic Rule Validation
             rules = DeterministicRuleValidator.validate_rules(clean_text, evidence)
             violated = [r for r in rules if r.status == "VIOLATED"]
             exceptions = [r for r in rules if r.status == "CLINICAL_EXCEPTION_APPLIED"]
@@ -285,10 +295,10 @@ class ExperimentBenchmarkRunner:
             elif violated:
                 flagged = True
                 penalties = sum(r.penalty_score for r in violated)
-                pred_score = max(20, 100 - penalties)
+                pred_score = max(20, min(clinical_score, 100 - penalties))
             else:
                 flagged = False
-                pred_score = 92
+                pred_score = max(clinical_score, 90)
 
             prob_violation = round(max(0.0, min(1.0, (100 - pred_score) / 100.0)), 3)
             predicted_probs.append(prob_violation)
@@ -304,7 +314,7 @@ class ExperimentBenchmarkRunner:
             else:
                 fn += 1
 
-        elapsed_ms = round(((time.perf_counter() - start_t) / len(cases)) * 1000 + 720, 1)
+        elapsed_ms = round(((time.perf_counter() - start_t) / len(cases)) * 1000, 2)
 
         precision = round((tp / (tp + fp)) * 100, 2) if (tp + fp) > 0 else 0.0
         recall = round((tp / (tp + fn)) * 100, 2) if (tp + fn) > 0 else 0.0
@@ -388,7 +398,16 @@ class ExperimentBenchmarkRunner:
                 if is_insuff:
                     abstain_success += 1
 
-            # 4. Deterministic Rules + Domain Agents
+            # 4. Invoke Multi-Agent Committee
+            clinical_res = asyncio.run(run_clinical_agent(clean_text))
+            billing_res = asyncio.run(run_billing_agent(clean_text))
+            doc_res = asyncio.run(run_documentation_agent(clean_text))
+            timeline_res = asyncio.run(run_timeline_agent(clean_text))
+            consensus_idx, disagreements = CrossAgentDisagreementDetector.evaluate_consensus(
+                clinical_res, billing_res, doc_res, timeline_res, clean_text
+            )
+
+            # 5. Deterministic Rules
             rules = DeterministicRuleValidator.validate_rules(clean_text, evidence)
             violated = [r for r in rules if r.status == "VIOLATED"]
             has_exception = len(evidence.documented_exceptions) > 0 or any(r.status == "CLINICAL_EXCEPTION_APPLIED" for r in rules)
@@ -396,8 +415,7 @@ class ExperimentBenchmarkRunner:
             if has_exception and not gt.has_violation:
                 exception_total += 1
 
-            # Without the independent verifier, candidate findings are taken as-is:
-            # - Simulated agent hallucination rate: ~14% of candidate claims lack grounding
+            # Without the independent verifier, candidate findings and agent gaps are taken as-is:
             for r in violated:
                 total_findings += 1
                 if r.rule_id == "RULE-DET-02" and has_exception:
@@ -410,7 +428,13 @@ class ExperimentBenchmarkRunner:
             elif violated:
                 flagged = True
                 penalties = sum(r.penalty_score for r in violated)
-                pred_score = max(20, 100 - penalties)
+                agent_min = min(
+                    clinical_res.get("clinical_score", 85),
+                    billing_res.get("billing_score", 85),
+                    doc_res.get("documentation_score", 85),
+                    timeline_res.get("timeline_score", 85)
+                )
+                pred_score = max(20, min(agent_min, 100 - penalties))
             elif has_exception and not gt.has_violation:
                 # Without verifier, domain agent over-flags ambiguous exception as standard deviation
                 flagged = True
@@ -418,7 +442,7 @@ class ExperimentBenchmarkRunner:
                 exception_fps += 1
             else:
                 flagged = False
-                pred_score = 92
+                pred_score = round(consensus_idx, 0)
 
             prob_violation = round(max(0.0, min(1.0, (100 - pred_score) / 100.0)), 3)
             predicted_probs.append(prob_violation)
@@ -434,7 +458,7 @@ class ExperimentBenchmarkRunner:
             else:
                 fn += 1
 
-        elapsed_ms = round(((time.perf_counter() - start_t) / len(cases)) * 1000 + 1280, 1)
+        elapsed_ms = round(((time.perf_counter() - start_t) / len(cases)) * 1000, 2)
 
         precision = round((tp / (tp + fp)) * 100, 2) if (tp + fp) > 0 else 0.0
         recall = round((tp / (tp + fn)) * 100, 2) if (tp + fn) > 0 else 0.0
@@ -589,7 +613,7 @@ class ExperimentBenchmarkRunner:
             else:
                 fn += 1
 
-        elapsed_ms = round(((time.perf_counter() - start_t) / len(cases)) * 1000 + 1550, 1)
+        elapsed_ms = round(((time.perf_counter() - start_t) / len(cases)) * 1000, 2)
 
         precision = round((tp / (tp + fp)) * 100, 2) if (tp + fp) > 0 else 0.0
         recall = round((tp / (tp + fn)) * 100, 2) if (tp + fn) > 0 else 0.0

@@ -12,10 +12,13 @@ Split Structure:
   complex negations, clinical abbreviations/shorthand, contradictory notes,
   clinical exceptions, adversarial prompt injections, and truncated records.
 
-Annotation Standard:
-- Dual-annotated by 2 board-certified physicians and 1 AHIMA-certified coding specialist.
-- Inter-annotator agreement: Cohen's kappa = 0.92 across 200 cases.
-- All disagreements arbitrated by senior clinical auditor.
+Methodology & Dataset Characterization:
+- Curated synthetic benchmark engineered for controlled algorithmic evaluation,
+  software regression testing, and adversarial robustness assessment.
+- Ground truth established programmatically from statutory standards (CMS IOM
+  Pub 100-04, CMS NCCI Policy Manual Ch 1 §E, AMA CPT 2026, Surviving Sepsis 2026).
+- Intended for reproducible software testing; independent external validation
+  on governed real-world clinical data is required prior to clinical deployment.
 
 ALL IDENTIFIERS ARE COMPLETELY SYNTHETIC AND DE-IDENTIFIED.
 CONTAINS NO PROTECTED HEALTH INFORMATION (PHI).
@@ -300,8 +303,8 @@ def _build_full_benchmark_dataset() -> List[BenchmarkCase]:
             is_truncated_incomplete=c.get("is_truncated_incomplete", False),
             split=c.get("split", "LOCKED_TEST"),
             dataset_split=c.get("dataset_split", "REGRESSION_SUITE"),
-            annotator_consensus="UNANIMOUS",
-            cohen_kappa=0.94
+            benchmark_validation_status="SYNTHETIC_VERIFIED",
+                guideline_source_standard="CMS/AMA/AHA"
         ))
 
     # 2. Add Regression Suite Cases 11-100 (90 cases across diverse distinct clinical scenarios)
@@ -352,8 +355,8 @@ def _build_full_benchmark_dataset() -> List[BenchmarkCase]:
                 human_explanation="Standard of care confirmed with full documentation and compliant billing.",
                 split="LOCKED_TEST",
                 dataset_split="REGRESSION_SUITE",
-                annotator_consensus="UNANIMOUS",
-                cohen_kappa=0.93
+                benchmark_validation_status="SYNTHETIC_VERIFIED",
+                guideline_source_standard="CMS/AMA/AHA"
             ))
         elif category == 1:
             # Critical care time deficit
@@ -386,8 +389,8 @@ def _build_full_benchmark_dataset() -> List[BenchmarkCase]:
                 human_explanation=f"Critical care requires direct physician treatment of life-threatening organ failure exceeding 30 minutes. Documented duration of {dur}m fails requirement.",
                 split="LOCKED_TEST",
                 dataset_split="REGRESSION_SUITE",
-                annotator_consensus="UNANIMOUS",
-                cohen_kappa=0.95
+                benchmark_validation_status="SYNTHETIC_VERIFIED",
+                guideline_source_standard="CMS/AMA/AHA"
             ))
         elif category == 2:
             # Sepsis bundle omission (blood cultures omitted)
@@ -419,8 +422,8 @@ def _build_full_benchmark_dataset() -> List[BenchmarkCase]:
                 human_explanation="Guideline standard requires blood cultures to be drawn prior to administering broad-spectrum antimicrobials.",
                 split="LOCKED_TEST",
                 dataset_split="REGRESSION_SUITE",
-                annotator_consensus="UNANIMOUS",
-                cohen_kappa=0.92
+                benchmark_validation_status="SYNTHETIC_VERIFIED",
+                guideline_source_standard="CMS/AMA/AHA"
             ))
         elif category == 3:
             # Unbundled surgical code under modifier -59
@@ -450,8 +453,8 @@ def _build_full_benchmark_dataset() -> List[BenchmarkCase]:
                 human_explanation="Meniscectomy performed through same incision during TKA is included in global surgical package.",
                 split="LOCKED_TEST",
                 dataset_split="REGRESSION_SUITE",
-                annotator_consensus="UNANIMOUS",
-                cohen_kappa=0.96
+                benchmark_validation_status="SYNTHETIC_VERIFIED",
+                guideline_source_standard="CMS/AMA/AHA"
             ))
         else:
             # Documented clinical exception (vascular access difficulty)
@@ -483,8 +486,8 @@ def _build_full_benchmark_dataset() -> List[BenchmarkCase]:
                 human_explanation="Physician properly documented difficult vascular access as valid reason to prioritize antibiotic infusion.",
                 split="LOCKED_TEST",
                 dataset_split="REGRESSION_SUITE",
-                annotator_consensus="UNANIMOUS",
-                cohen_kappa=0.91
+                benchmark_validation_status="SYNTHETIC_VERIFIED",
+                guideline_source_standard="CMS/AMA/AHA"
             ))
 
     # 3. Add Blind Generalization Challenge Set (Cases 101-200: 100 cases)
@@ -529,8 +532,8 @@ def _build_full_benchmark_dataset() -> List[BenchmarkCase]:
                 human_explanation="Merely ordering blood cultures does not fulfill the requirement that specimens be collected prior to antibiotics.",
                 split="LOCKED_TEST",
                 dataset_split="BLIND_CHALLENGE",
-                annotator_consensus="UNANIMOUS",
-                cohen_kappa=0.92
+                benchmark_validation_status="SYNTHETIC_VERIFIED",
+                guideline_source_standard="CMS/AMA/AHA"
             ))
         elif challenge_type == 1:
             # Challenge: Pneumonia with clinical exception (Pregnancy shielding with Bedside Ultrasound)
@@ -561,8 +564,8 @@ def _build_full_benchmark_dataset() -> List[BenchmarkCase]:
                 human_explanation="Bedside lung ultrasound confirming consolidation is a recognized clinical exception to ionizing radiation in pregnancy.",
                 split="LOCKED_TEST",
                 dataset_split="BLIND_CHALLENGE",
-                annotator_consensus="UNANIMOUS",
-                cohen_kappa=0.94
+                benchmark_validation_status="SYNTHETIC_VERIFIED",
+                guideline_source_standard="CMS/AMA/AHA"
             ))
         elif challenge_type == 2:
             # Challenge: Shorthand / abbreviations ("bcx pnd order not cllctd", "door-to-ecg 36m")
@@ -593,8 +596,8 @@ def _build_full_benchmark_dataset() -> List[BenchmarkCase]:
                 human_explanation="Ischemic chest pain presentations require ECG acquisition within 10 minutes of arrival.",
                 split="LOCKED_TEST",
                 dataset_split="BLIND_CHALLENGE",
-                annotator_consensus="UNANIMOUS",
-                cohen_kappa=0.91
+                benchmark_validation_status="SYNTHETIC_VERIFIED",
+                guideline_source_standard="CMS/AMA/AHA"
             ))
         elif challenge_type == 3:
             # Challenge: Cirrhosis with Documented Patient Refusal / DIC Exception
@@ -626,8 +629,8 @@ def _build_full_benchmark_dataset() -> List[BenchmarkCase]:
                 human_explanation="Severe active bleeding and DIC justify waiving paracentesis while managing spontaneous peritonitis empirically.",
                 split="LOCKED_TEST",
                 dataset_split="BLIND_CHALLENGE",
-                annotator_consensus="UNANIMOUS",
-                cohen_kappa=0.93
+                benchmark_validation_status="SYNTHETIC_VERIFIED",
+                guideline_source_standard="CMS/AMA/AHA"
             ))
         elif challenge_type == 4:
             # Challenge: Contradictory provider record (Nursing vs MD)
@@ -659,8 +662,8 @@ def _build_full_benchmark_dataset() -> List[BenchmarkCase]:
                 human_explanation="Cross-note temporal analysis proves blood cultures were obtained after antibiotic administration.",
                 split="LOCKED_TEST",
                 dataset_split="BLIND_CHALLENGE",
-                annotator_consensus="ARBITRATED",
-                cohen_kappa=0.88
+                benchmark_validation_status="SYNTHETIC_VERIFIED",
+                guideline_source_standard="CMS/AMA/AHA"
             ))
         elif challenge_type == 5:
             # Challenge: Subtle upcode: 99285 without high MDM or life-threat
@@ -692,8 +695,8 @@ def _build_full_benchmark_dataset() -> List[BenchmarkCase]:
                 human_explanation="Level 5 emergency codes require immediate threats to life or limb or high morbidity risk.",
                 split="LOCKED_TEST",
                 dataset_split="BLIND_CHALLENGE",
-                annotator_consensus="UNANIMOUS",
-                cohen_kappa=0.96
+                benchmark_validation_status="SYNTHETIC_VERIFIED",
+                guideline_source_standard="CMS/AMA/AHA"
             ))
         elif challenge_type == 6:
             # Challenge: Truncated fragment requiring explicit abstention
@@ -720,8 +723,8 @@ def _build_full_benchmark_dataset() -> List[BenchmarkCase]:
                 is_truncated_incomplete=True,
                 split="LOCKED_TEST",
                 dataset_split="BLIND_CHALLENGE",
-                annotator_consensus="UNANIMOUS",
-                cohen_kappa=0.98
+                benchmark_validation_status="SYNTHETIC_VERIFIED",
+                guideline_source_standard="CMS/AMA/AHA"
             ))
         elif challenge_type == 7:
             # Challenge: Adversarial prompt injection embedding
@@ -753,8 +756,8 @@ def _build_full_benchmark_dataset() -> List[BenchmarkCase]:
                 is_adversarial_injection=True,
                 split="ADVERSARIAL_TEST",
                 dataset_split="BLIND_CHALLENGE",
-                annotator_consensus="UNANIMOUS",
-                cohen_kappa=0.99
+                benchmark_validation_status="SYNTHETIC_VERIFIED",
+                guideline_source_standard="CMS/AMA/AHA"
             ))
         elif challenge_type == 8:
             # Challenge: Legitimate modifier -59 on distinct contralateral limb
@@ -786,8 +789,8 @@ def _build_full_benchmark_dataset() -> List[BenchmarkCase]:
                 human_explanation="Modifier -59 is completely valid when reporting distinct procedures on separate contralateral anatomical structures.",
                 split="LOCKED_TEST",
                 dataset_split="BLIND_CHALLENGE",
-                annotator_consensus="UNANIMOUS",
-                cohen_kappa=0.95
+                benchmark_validation_status="SYNTHETIC_VERIFIED",
+                guideline_source_standard="CMS/AMA/AHA"
             ))
         else:
             # Challenge: Inpatient CAP with clear radiograph confirming infiltrate
@@ -819,8 +822,8 @@ def _build_full_benchmark_dataset() -> List[BenchmarkCase]:
                 human_explanation="Standard of care satisfied: documented chest imaging demonstrates lobar infiltrate.",
                 split="LOCKED_TEST",
                 dataset_split="BLIND_CHALLENGE",
-                annotator_consensus="UNANIMOUS",
-                cohen_kappa=0.96
+                benchmark_validation_status="SYNTHETIC_VERIFIED",
+                guideline_source_standard="CMS/AMA/AHA"
             ))
 
     return cases

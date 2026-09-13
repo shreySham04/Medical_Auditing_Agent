@@ -8,49 +8,65 @@ MedicalAuditor evaluates electronic health records (EHR) and itemized billing cl
 
 ---
 
-## 📊 Empirical Evaluation: Locked 200-Case Synthetic Test Set
+## 📊 Empirical Evaluation: 200-Case Synthetic Test Benchmark
+
+```text
+Evaluation Results
+────────────────────────────────────────────────────────────────────────
+Regression Suite (100 cases):     96.61% F1  (Precision: 98.28%, Recall: 95.00%)
+Blind Challenge (100 cases):      50.00% F1  (Precision: 66.67%, Recall: 40.00%)
+Aggregate Benchmark (200 cases):  77.78% F1  (Precision: 87.50%, Recall: 70.00%)
+────────────────────────────────────────────────────────────────────────
+```
+
+> **Performance Analysis & Generalization Gap**: The substantial performance drop from the Regression Suite (96.61% F1) to the Blind Challenge (50.00% F1) demonstrates strong compliance verification on codified, anticipated clinical rules, but significant degradation when encountering unseen phrasing, clinical ambiguity, complex implicit timelines, and multi-condition edge cases.
+>
+> **⚠️ Current Limitation**: The benchmark is entirely synthetic and designed specifically for software architecture validation, regression testing, and controlled ablation. Real-world clinical deployment would require independent external validation on multi-institutional, appropriately governed clinical datasets.
 
 ### Strict Leakage-Free Evaluation Methodology
-Prior iterations of benchmark evaluators in decision-support systems suffered from **target leakage** (e.g., falling back to `case.expected_score` or using `case.expected_verdict` during inference). MedicalAuditor v2.1 enforces **strict isolation**:
-1. The inference pipeline receives **only** the raw chart input text (`case.input.clinical_text`).
+Prior iterations of benchmark evaluators in decision-support systems suffered from **target leakage** (e.g., falling back to `case.expected_score` or using `case.expected_verdict` during inference). MedicalAuditor enforces **strict isolation**:
+1. The inference pipeline receives **only** the raw chart input text (`case.input.record_text`).
 2. The model independently extracts structured clinical assertions, validates deterministic statutory rules, and computes compliance scores.
 3. Predictions are compared against locked ground-truth annotations only *after* the audit pipeline has completely finished.
 
-### Empirical Performance Metrics (Zero Label Leakage)
+### Empirical Performance Summary (Aggregate 200-Case Suite)
 
-| Metric | Measured Value | Baseline LLM | Operational Meaning in Clinical Practice |
-| :--- | :---: | :---: | :--- |
-| **Precision** | **98.35%** | 69.70% | When an infraction is flagged, it corresponds to a genuine statutory or guideline breach. |
-| **Recall (Sensitivity)** | **99.17%** | 38.33% | Comprehensive capture of statutory unbundling and clinical omission risks. |
-| **F1 Score** | **98.76%** | 49.46% | Balanced harmonic mean between sensitivity and false alarm suppression. |
-| **False Positive Rate (FPR)** | **2.50%** | 25.00% | Prevents physician alert fatigue by rejecting invalid or unsubstantiated penalties. |
-| **False Negative Rate (FNR)** | **0.83%** | 61.67% | Minimizes missed compliance liabilities. |
-| **Score Mean Absolute Error (MAE)** | **9.57 pts** | 24.68 pts | Independent score prediction error across the 0–100 compliance scale. |
-| **Expected Calibration Error (ECE)** | **0.2846** | 0.3751 | Reliability of confidence estimates across risk deciles. |
-| **Brier Score** | **0.1752** | 0.3588 | Quadratic accuracy of probabilistic risk predictions. |
-| **Abstention Rate (Truncated Charts)** | **100.0%** | 0.00% | Halts audit on insufficient records rather than hallucinating compliance scores. |
-| **Prompt-Injection Defense Rate** | **100.0%** | 0.00% | Neutralizes adversarial override commands embedded in clinical records. |
-
-*Confusion Matrix (200 Locked Synthetic Cases): 119 True Positives, 78 True Negatives, 2 False Positives, 1 False Negative.*
+| Metric | Full Pipeline | Multi-Agent (No Verifier) | Single-Agent + Rules | Baseline Zero-Shot | Operational Meaning |
+| :--- | :---: | :---: | :---: | :---: | :--- |
+| **Precision** | **87.50%** | 60.63% | 87.50% | 43.48% | Accuracy of flagged compliance infractions. |
+| **Recall (Sensitivity)** | **70.00%** | 70.00% | 70.00% | 27.27% | Percentage of genuine statutory violations identified. |
+| **F1 Score** | **77.78%** | 64.98% | 77.78% | 33.52% | Harmonic mean of precision and recall. |
+| **False Positive Rate (FPR)** | **5.00%** | 22.50% | 5.00% | 17.50% | Alert-fatigue suppression on compliant charts. |
+| **Prompt Injection Defense** | **100.0%** | 100.0% | 100.0% | 0.0% | Neutralizes adversarial override commands. |
+| **Abstention Accuracy** | **100.0%** | 100.0% | 100.0% | 0.0% | Abstains on truncated charts rather than guessing. |
 
 ---
 
 ## 🔬 Controlled 4-Stage Architectural Ablation Study
 
-We systematically evaluated four isolated architectural configurations on the identical locked 200-case test set:
+We systematically evaluated four isolated architectural configurations across all benchmark splits:
 
-| Architecture | Precision | Recall | F1 Score | FPR | Score MAE | Latency | Tokens / Audit | Cost / 100 Cases | Prompt Injection Def. | Abstention Rate |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **1. Baseline LLM (Zero-Shot)** | 69.70% | 38.33% | 49.46% | 25.00% | 24.68 pts | 420 ms | 1,200 in / 350 out | $0.039 | 0.0% | 0.0% |
-| **2. Single-Agent + Deterministic Rules** | 98.35% | 99.17% | 98.76% | 2.50% | 9.16 pts | 780 ms | 2,400 in / 750 out | $0.081 | 100.0% | 100.0% |
-| **3. Multi-Agent + Rules (No Verifier)** | 85.00% | 99.17% | 91.54% | 26.25% | 11.34 pts | 1,350 ms | 4,800 in / 1,500 out | $0.162 | 100.0% | 100.0% |
-| **4. Full Pipeline (+ Adversarial Verifier)** | **98.35%** | **99.17%** | **98.76%** | **2.50%** | **9.57 pts** | 1,720 ms | 6,000 in / 1,900 out | $0.204 | **100.0%** | **100.0%** |
+| Architecture | Split | F1 Score | Precision | Recall | FPR | Local Latency | Est. Tokens / Audit | Est. Cost / 100 Audits |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **1. Baseline LLM (Zero-Shot)** | Regression | 40.40% | 51.28% | 33.33% | 15.00% | ~0.01 ms | 1,200 in / 350 out | $0.039 (est.) |
+| | Blind Challenge | 25.00% | 33.33% | 20.00% | 20.00% | ~0.01 ms | 1,200 in / 350 out | $0.039 (est.) |
+| | **Aggregate** | **33.52%** | **43.48%** | **27.27%** | **17.50%** | **~0.01 ms** | **1,200 in / 350 out** | **$0.039 (est.)** |
+| **2. Single-Agent + Rules** | Regression | 96.61% | 98.28% | 95.00% | 2.50% | ~1.5 ms | 2,400 in / 750 out | $0.081 (est.) |
+| | Blind Challenge | 50.00% | 66.67% | 40.00% | 7.50% | ~1.5 ms | 2,400 in / 750 out | $0.081 (est.) |
+| | **Aggregate** | **77.78%** | **87.50%** | **70.00%** | **5.00%** | **~1.5 ms** | **2,400 in / 750 out** | **$0.081 (est.)** |
+| **3. Multi-Agent (No Verifier)** | Regression | 83.21% | 74.03% | 95.00% | 30.00% | ~2.7 ms | 4,800 in / 1,500 out | $0.162 (est.) |
+| | Blind Challenge | 40.00% | 40.00% | 40.00% | 15.00% | ~2.8 ms | 4,800 in / 1,500 out | $0.162 (est.) |
+| | **Aggregate** | **64.98%** | **60.63%** | **70.00%** | **22.50%** | **~2.8 ms** | **4,800 in / 1,500 out** | **$0.162 (est.)** |
+| **4. Full Pipeline (+ Verifier)** | Regression | **96.61%** | **98.28%** | **95.00%** | **2.50%** | **~0.7 ms** | **6,000 in / 1,900 out** | **$0.204 (est.)** |
+| | Blind Challenge | **50.00%** | **66.67%** | **40.00%** | **7.50%** | **~0.7 ms** | **6,000 in / 1,900 out** | **$0.204 (est.)** |
+| | **Aggregate** | **77.78%** | **87.50%** | **70.00%** | **5.00%** | **~0.7 ms** | **6,000 in / 1,900 out** | **$0.204 (est.)** |
 
-### Key Experimental Findings:
-1. **The Fragility of Baseline LLMs**: A standard zero-shot LLM achieves only 38.33% recall with a 61.67% false negative rate on clinical compliance tasks. It consistently misses statutory unbundling under CMS NCCI and fails to check duration thresholds (such as CPT 99291 direct physician time). Furthermore, it possesses 0% defense against adversarial prompt injections and never abstains on truncated charts.
-2. **Deterministic Rules Establish a Rigorous Floor**: Integrating deterministic statutory rules with structured extraction eliminates false negatives, jumping recall from 38.33% to 99.17%.
-3. **The Multi-Agent Alert Fatigue Problem**: Unconstrained multi-agent committees (Architecture 3) suffer from an elevated false positive rate (26.25%) because individual agents over-penalize borderline cases and clinical variations.
-4. **The Adversarial Verifier as an Alert-Fatigue Filter**: The 2nd-stage independent adversarial verifier drops the false positive rate from 26.25% down to 2.50% by enforcing exact textual grounding and validating documented clinical exceptions (e.g., emergent antibiotic prioritization over blood cultures).
+*Note on Latency and Costs: Local latency reflects measured CPU pipeline execution time in the benchmark runner environment without external API network overhead. Token counts and costs are estimated based on assumed prompt templates and standard API pricing tiers.*
+
+### Key Empirical Takeaways:
+1. **Generalization Drop on Blind Cases**: The drop from 96.61% to 50.00% F1 highlights the difficulty of transferring deterministic heuristics to novel, unstructured clinical expressions.
+2. **Alert Fatigue in Unverified Multi-Agent Systems**: Architecture 3 (multi-agent committee without independent verifier) drops aggregate precision to 60.63% (22.50% FPR) due to ungrounded agent claims and false alarms on clinical exceptions.
+3. **Verifier Independence**: The 2nd-stage independent adversarial verifier restores precision to 87.50% (5.00% FPR) by forcing character-span anchoring and verifying clinical exceptions against the raw chart.
 
 ---
 

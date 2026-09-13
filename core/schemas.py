@@ -193,6 +193,8 @@ class PromptInjectionScanResult:
     is_injection_detected: bool
     risk_level: Literal["SAFE", "SUSPICIOUS", "CRITICAL_ADVERSARIAL"]
     matched_patterns: List[str] = field(default_factory=list)
+    detected_attack_families: List[str] = field(default_factory=list)
+    family_breakdown: Dict[str, bool] = field(default_factory=dict)
     sanitized_text_applied: bool = False
     injection_defense_rationale: str = "No adversarial prompt injection detected in clinical text."
 
@@ -356,8 +358,8 @@ class BenchmarkCase:
     is_truncated_incomplete: bool = False
     split: Literal["DEV", "LOCKED_TEST", "ADVERSARIAL_TEST"] = "LOCKED_TEST"
     dataset_split: Literal["REGRESSION_SUITE", "BLIND_CHALLENGE", "ADVERSARIAL_TEST", "LOCKED_TEST"] = "REGRESSION_SUITE"
-    annotator_consensus: str = "UNANIMOUS"
-    cohen_kappa: float = 0.92
+    benchmark_validation_status: str = "SYNTHETIC_VERIFIED"
+    guideline_source_standard: str = "CMS/AMA/AHA"
 
     @property
     def input(self) -> BenchmarkCaseInput:
