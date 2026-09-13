@@ -93,7 +93,7 @@ class DeterministicRuleValidator:
             any(m in ["Ceftriaxone", "Vancomycin", "Cefepime", "Zosyn", "Piperacillin", "Azithromycin"] for m in evidence.medications_ordered)
             or any(abx in lower for abx in ["ceftriaxone", "vancomycin", "cefepime", "zosyn", "piperacillin", "azithromycin", "antibiotic", "antibiotics"])
         )
-        if "sepsis" in lower or ("fever" in lower and has_abx):
+        if "sepsis" in lower or "septic" in lower or "bacteremia" in lower or ("shock" in lower and has_abx):
             bc_assertion = assertions.get("blood_cultures")
             has_bcx_drawn = procedural.get("has_blood_cultures_drawn", False)
             
@@ -113,7 +113,7 @@ class DeterministicRuleValidator:
                     provenance=prov_sepsis,
                     clinical_exception_noted=bc_assertion.exception_notes
                 ))
-            elif has_abx and not has_bcx_drawn and ("pneumonia" in lower or "sepsis" in lower or "bacteremia" in lower or "fever" in lower):
+            elif has_abx and not has_bcx_drawn:
                 results.append(DeterministicRuleCheck(
                     rule_id="RULE-DET-02",
                     rule_name="Sepsis-3 Bundle Sequence Infraction",
@@ -190,8 +190,14 @@ class DeterministicRuleValidator:
         # RULE 5: Informed Consent & Surgical Site Verification
         # Type: DOCUMENTATION_STANDARD
         prov_aaos = cls._get_provenance("DOC-AAOS-ARTHROPLASTY")
-        is_surgical = bool(evidence.procedures_identified) or any(t in lower for t in ["surgery", "operative", "resection", "arthroscopy"])
-        has_consent = procedural.get("has_informed_consent", False)
+        is_surgical = any(t in lower for t in [
+            "arthroplasty", "arthrotomy", "laparotomy", "sternotomy", "craniotomy",
+            "open reduction", "joint replacement", "meniscectomy"
+        ])
+        has_consent = (
+            procedural.get("has_informed_consent", False)
+            or any(term in lower for term in ["informed consent", "consent obtained", "risks, benefits", "consent signed"])
+        )
         if is_surgical and not has_consent:
             results.append(DeterministicRuleCheck(
                 rule_id="RULE-DET-05",

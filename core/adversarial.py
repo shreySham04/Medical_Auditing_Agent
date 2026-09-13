@@ -20,9 +20,11 @@ class PromptInjectionDefender:
         (r'(?i)\[\s*system\s*(?:instruction|note|override|prompt)\s*:', "System Role Hijacking Tag"),
         (r'(?i)disregard\s+(?:the\s+)?(?:audit|compliance|scoring|safety)\s+(?:rules|guidelines)', "Compliance Bypass Directive"),
         (r'(?i)output\s+(?:only|strictly)\s+(?:a\s+)?(?:100|pass|compliant|no\s+violation)', "Targeted Output Coercion"),
-        (r'(?i)<\s*!--\s*(?:system|override|admin|bypass)', "Hidden HTML Comment Injection"),
+        (r'(?i)<\s*!--\s*(?:system|override|admin|bypass|developer)', "Hidden HTML Comment Injection"),
+        (r'(?i)override\s+(?:regulatory|audit|compliance|scoring)', "Regulatory Engine Override Attempt"),
         (r'(?i)attending\s+override\s*:\s*(?:set\s+score\s*=|verdict\s*=)', "Attestation Parameter Injection"),
         (r'(?i)you\s+are\s+no\s+longer\s+an\s+auditor', "Persona Reset Hijack"),
+        (r'(?i){\s*[\'"]role[\'"]\s*:\s*[\'"]system[\'"]', "JSON System Role Injection"),
     ]
 
     @classmethod

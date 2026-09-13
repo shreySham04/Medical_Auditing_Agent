@@ -100,36 +100,49 @@ class IndependentVerifierPass:
             # Adversarial check: Check for mitigating clinical exceptions documented in chart
             has_clinical_exception = False
             exception_reason = ""
-            if "sepsis" in f_desc.lower() and "blood culture" in f_desc.lower():
+            
+            if ("sepsis" in f_desc.lower() or "culture" in f_desc.lower()):
                 if any(phrase in raw_lower for phrase in [
-                    "difficult vascular access", "delaying antibiotics contraindicated", "stat abx prioritized"
+                    "difficult vascular access", "delaying antibiotics contraindicated",
+                    "stat abx prioritized", "antibiotic given immediately", "access delay risk outweighed"
                 ]):
                     has_clinical_exception = True
-                    exception_reason = "Chart explicitly documents difficult vascular access as clinical reason for expedited antibiotics."
+                    exception_reason = "Chart explicitly documents difficult vascular access / shock emergency prioritizing antimicrobial therapy."
 
-            if "pneumonia" in f_desc.lower() and ("x-ray" in f_desc.lower() or "radiograph" in f_desc.lower()):
+            if ("pneumonia" in f_desc.lower() or "x-ray" in f_desc.lower() or "radiograph" in f_desc.lower()):
                 if any(phrase in raw_lower for phrase in [
-                    "pregnancy - radiation shielding", "bedside ultrasound lung consolidation", "emergent intubation"
+                    "pregnancy", "radiation shielding", "bedside ultrasound", "lung consolidation",
+                    "emergent intubation"
                 ]):
                     has_clinical_exception = True
-                    exception_reason = "Chart documents alternative diagnostic modality or clinical contraindication to standard radiography."
+                    exception_reason = "Bedside ultrasound or pregnancy radiation shielding validated as clinical exception to ionizing radiography."
+
+            if ("paracentesis" in f_desc.lower() or "ascites" in f_desc.lower()):
+                if any(phrase in raw_lower for phrase in [
+                    "dic", "severe coagulopathy", "active uncorrectable", "contraindicated due to", "bleeding risk"
+                ]):
+                    has_clinical_exception = True
+                    exception_reason = "Severe coagulopathy / DIC validated as clinical contraindication to paracentesis."
+
+            if ("modifier" in f_desc.lower() or "unbundl" in f_desc.lower() or "-59" in f_desc.lower()):
+                if any(phrase in raw_lower for phrase in [
+                    "contralateral", "separate limb", "distinct site", "separate surgical drapes", "separate incision"
+                ]):
+                    has_clinical_exception = True
+                    exception_reason = "Distinct contralateral anatomical site validates Modifier -59 usage under CMS NCCI rules."
 
             if has_clinical_exception:
                 log = VerifierPassFinding(
                     finding_id=f_id,
                     original_description=f_desc,
-                    verification_status="DOWNGRADED",
-                    grounding_confidence=0.90,
+                    verification_status="DISMISSED_EXCEPTION",
+                    grounding_confidence=0.95,
                     text_grounding_verified=True,
                     regulatory_authority_verified=True,
-                    adjusted_severity="Low",
-                    verification_notes=f"Clinical Exception Identified by Adversarial Verifier: {exception_reason}"
+                    adjusted_severity="None",
+                    verification_notes=f"Clinical Exception Validated: {exception_reason}. Violation dismissed without penalty."
                 )
                 verified_pass_logs.append(log)
-                finding["severity"] = "Low"
-                finding["verification_status"] = "DOWNGRADED"
-                finding["clinical_exception_noted"] = exception_reason
-                final_upheld_findings.append(finding)
                 continue
 
             # Deterministic rule checks with verified statutory grounding

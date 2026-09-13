@@ -8,7 +8,7 @@ Enforces strict schema validation with character-span provenance.
 
 import re
 from typing import Dict, Any, List, Optional, Tuple
-from core.schemas import StructuredClinicalEvidence, EvidenceSpan, ClinicalAssertion
+from core.schemas import StructuredClinicalEvidence, EvidenceSpan, ClinicalAssertion, NormalizedClinicalEvent
 
 
 class StructuredEvidenceExtractor:
@@ -126,24 +126,50 @@ class StructuredEvidenceExtractor:
             except ValueError:
                 pass
 
-        # 5. Concept Assertions with Status, Temporality, and Exceptions
+        # 5. Concept Assertions with Status, Temporality, Normalized Events, and Exceptions
         assertions: List[ClinicalAssertion] = []
+        normalized_events: List[NormalizedClinicalEvent] = []
         exceptions: List[str] = []
 
-        # (a) Blood Cultures Assertion (Hour-1 Sepsis Standard)
-        bc_negation = any(phrase in lower for phrase in [
+        # (a) Blood Cultures: Normalized Clinical Event & Assertion
+        # Detect uncollected / pending orders (CRITICAL BUG FIX: "ordered but not yet collected" is NOT performed)
+        bc_pending = any(p in lower for p in [
+            "ordered but have not yet been collected", "ordered but not yet collected",
+            "pending collection", "pending draw", "bcx ordered - draw pending",
+            "cultures pending order not collected", "not yet drawn", "not yet collected",
+            "not yet obtained", "awaiting collection", "order placed, phlebotomy pending",
+            "bcx pnd order not cllctd", "awaiting blood draw", "pending blood cultures",
+            "blood cultures pending", "order placed for bcx, pending"
+        ])
+        bc_negation = bc_pending or any(phrase in lower for phrase in [
             "cultures were not drawn", "without prior blood culture", "blood cultures omitted",
-            "no blood culture", "blood cultures pending order not collected"
+            "no blood culture", "no blood cultures", "omitted pre-antibiotic", "no bcx",
+            "blood cultures not obtained", "cultures not sent", "abx given without cultures",
+            "antibiotic without culture", "blood cultures were not obtained", "no blood culture drawn"
         ])
         bc_contraindicated = any(phrase in lower for phrase in [
-            "difficult vascular access - antibiotic given immediately",
-            "antibiotic delayed risk outweighed blood draw",
-            "stat abx prioritized over line placement"
+            "difficult vascular access", "antibiotic delayed risk outweighed blood draw",
+            "stat abx prioritized over line placement", "crash access difficulty",
+            "line blown", "vascular access blown", "veins collapsed",
+            "emergent risk prioritization", "unable to obtain peripheral access, empiric abx started",
+            "stat antibiotics due to severe septic crash", "critical access failure"
         ])
-        bc_performed = ("blood culture" in lower or "cultures drawn" in lower) and not bc_negation
+        bc_performed = not bc_negation and not bc_pending and (
+            any(p in lower for p in [
+                "blood cultures drawn", "blood culture drawn", "cultures drawn",
+                "blood cultures collected", "blood culture collected", "bcx obtained",
+                "blood cultures obtained", "blood culture bottles drawn", "cultures sent to micro",
+                "2 sets of blood cultures", "two sets of blood cultures", "blood cultures x2",
+                "blood cultures were drawn", "peripheral blood cultures collected"
+            ]) or (("blood culture" in lower or "bcx" in lower) and not bc_negation and not bc_contraindicated)
+        )
 
         bc_span = None
-        for cand in ["blood cultures drawn", "blood culture", "blood cultures were not drawn", "without prior blood culture"]:
+        for cand in [
+            "blood cultures were ordered but have not yet been collected",
+            "cultures were not drawn", "without prior blood culture", "blood cultures drawn",
+            "blood cultures collected", "blood culture", "bcx"
+        ]:
             sp = cls._find_span(raw, cand)
             if sp:
                 bc_span = sp
@@ -155,7 +181,15 @@ class StructuredEvidenceExtractor:
                 assertion_status="EXCEPTION_IDENTIFIED",
                 certainty="DOCUMENTED",
                 evidence_span=bc_span,
-                exception_notes="Clinician documented emergent risk prioritization or difficult access exception."
+                exception_notes="Clinician documented emergent risk prioritization or severe vascular access difficulty."
+            ))
+            normalized_events.append(NormalizedClinicalEvent(
+                concept="blood_cultures",
+                status="EXCEPTION_IDENTIFIED",
+                certainty="DOCUMENTED",
+                exception_detected=True,
+                source_span=bc_span,
+                clinical_note="Clinical exception: severe vascular access failure / emergent stabilization."
             ))
             exceptions.append("Emergency vascular access difficulty documented for blood culture omission.")
         elif bc_performed:
@@ -165,6 +199,29 @@ class StructuredEvidenceExtractor:
                 certainty="DOCUMENTED",
                 evidence_span=bc_span
             ))
+            normalized_events.append(NormalizedClinicalEvent(
+                concept="blood_cultures",
+                status="PERFORMED",
+                certainty="DOCUMENTED",
+                source_span=bc_span,
+                clinical_note="Blood cultures collected prior to antimicrobial therapy."
+            ))
+        elif bc_pending:
+            assertions.append(ClinicalAssertion(
+                concept="blood_cultures",
+                assertion_status="ORDERED_PENDING",
+                certainty="DOCUMENTED",
+                evidence_span=bc_span,
+                exception_notes="Blood cultures were ordered but uncollected prior to antibiotic initiation."
+            ))
+            normalized_events.append(NormalizedClinicalEvent(
+                concept="blood_cultures",
+                status="ORDERED_PENDING",
+                certainty="DOCUMENTED",
+                pending_detected=True,
+                source_span=bc_span,
+                clinical_note="Order pending collection; specimens not drawn prior to antibiotic delivery."
+            ))
         elif bc_negation:
             assertions.append(ClinicalAssertion(
                 concept="blood_cultures",
@@ -172,28 +229,48 @@ class StructuredEvidenceExtractor:
                 certainty="NEGATED",
                 evidence_span=bc_span
             ))
+            normalized_events.append(NormalizedClinicalEvent(
+                concept="blood_cultures",
+                status="NOT_PERFORMED",
+                certainty="NEGATED",
+                negation_detected=True,
+                source_span=bc_span,
+                clinical_note="Blood cultures documented as omitted / not drawn."
+            ))
         else:
             assertions.append(ClinicalAssertion(
                 concept="blood_cultures",
                 assertion_status="NOT_DOCUMENTED",
                 certainty="DOCUMENTED"
             ))
+            normalized_events.append(NormalizedClinicalEvent(
+                concept="blood_cultures",
+                status="NOT_DOCUMENTED",
+                certainty="DOCUMENTED",
+                clinical_note="No documentation of blood culture orders or collection in chart."
+            ))
 
-        # (b) Chest Radiograph Assertion (Pneumonia Protocol)
+        # (b) Chest Radiograph & Lung Imaging: Normalized Event & Assertion
         cxr_negation = any(phrase in lower for phrase in [
-            "no chest x-ray", "no imaging", "omitted chest x-ray", "radiograph omitted"
+            "no chest x-ray", "no imaging available", "no imaging in chart", "no imaging was performed",
+            "omitted chest x-ray", "radiograph omitted", "cxr not done", "no radiographic documentation",
+            "no chest radiograph", "imaging deferred", "without chest imaging"
         ])
         cxr_exception = any(phrase in lower for phrase in [
             "pregnancy - radiation shielding", "bedside ultrasound lung consolidation confirmed",
-            "emergent intubation prevented immediate x-ray"
+            "bedside us revealed", "lung ultrasound confirmed", "us lung consolidation",
+            "emergent intubation prevented immediate x-ray", "radiation risk in pregnancy"
         ])
-        cxr_performed = any(phrase in lower for phrase in [
+        cxr_performed = not cxr_negation and any(phrase in lower for phrase in [
             "chest x-ray", "cxr", "chest radiograph", "ct chest", "infiltrate confirmed",
-            "consolidation on x-ray", "lobar infiltrate"
-        ]) and not cxr_negation
+            "consolidation on x-ray", "lobar infiltrate", "imaging confirmed infiltrate"
+        ])
 
         cxr_span = None
-        for cand in ["chest x-ray", "chest radiograph", "infiltrate confirmed", "ct chest", "no chest x-ray"]:
+        for cand in [
+            "no imaging available in chart", "no chest x-ray", "no chest radiograph",
+            "bedside ultrasound lung consolidation confirmed", "chest radiograph", "chest x-ray", "cxr"
+        ]:
             sp = cls._find_span(raw, cand)
             if sp:
                 cxr_span = sp
@@ -205,7 +282,15 @@ class StructuredEvidenceExtractor:
                 assertion_status="EXCEPTION_IDENTIFIED",
                 certainty="DOCUMENTED",
                 evidence_span=cxr_span,
-                exception_notes="Valid clinical exception or diagnostic ultrasound modality documented."
+                exception_notes="Valid clinical exception or diagnostic lung ultrasound modality documented."
+            ))
+            normalized_events.append(NormalizedClinicalEvent(
+                concept="chest_imaging",
+                status="EXCEPTION_IDENTIFIED",
+                certainty="DOCUMENTED",
+                exception_detected=True,
+                source_span=cxr_span,
+                clinical_note="Diagnostic lung ultrasound or pregnancy radiation exception documented."
             ))
             exceptions.append("Diagnostic imaging alternate / exception documented for respiratory presentation.")
         elif cxr_performed:
@@ -215,6 +300,13 @@ class StructuredEvidenceExtractor:
                 certainty="DOCUMENTED",
                 evidence_span=cxr_span
             ))
+            normalized_events.append(NormalizedClinicalEvent(
+                concept="chest_imaging",
+                status="PERFORMED",
+                certainty="DOCUMENTED",
+                source_span=cxr_span,
+                clinical_note="Confirmatory parenchymal pulmonary imaging verified."
+            ))
         elif cxr_negation:
             assertions.append(ClinicalAssertion(
                 concept="chest_radiograph",
@@ -222,20 +314,34 @@ class StructuredEvidenceExtractor:
                 certainty="NEGATED",
                 evidence_span=cxr_span
             ))
+            normalized_events.append(NormalizedClinicalEvent(
+                concept="chest_imaging",
+                status="NOT_PERFORMED",
+                certainty="NEGATED",
+                negation_detected=True,
+                source_span=cxr_span,
+                clinical_note="Parenchymal chest imaging documented as absent / omitted."
+            ))
         else:
             assertions.append(ClinicalAssertion(
                 concept="chest_radiograph",
                 assertion_status="NOT_DOCUMENTED",
                 certainty="DOCUMENTED"
             ))
+            normalized_events.append(NormalizedClinicalEvent(
+                concept="chest_imaging",
+                status="NOT_DOCUMENTED",
+                certainty="DOCUMENTED",
+                clinical_note="No thoracic diagnostic imaging documented."
+            ))
 
         # (c) Diagnostic Paracentesis Assertion (Cirrhosis Protocol)
-        para_performed = any(p in lower for p in ["paracentesis performed", "diagnostic paracentesis completed", "fluid sent for cell count"])
-        para_negation = any(p in lower for p in ["paracentesis omitted", "no paracentesis", "paracentesis not done", "ascitic tap not performed"])
-        para_exception = any(p in lower for p in ["severe dic", "active uncorrectable coagulopathy", "patient refused paracentesis"])
+        para_performed = any(p in lower for p in ["paracentesis performed", "diagnostic paracentesis completed", "fluid sent for cell count", "tap obtained"])
+        para_negation = any(p in lower for p in ["paracentesis omitted", "no paracentesis", "paracentesis not done", "ascitic tap not performed", "refused paracentesis"])
+        para_exception = any(p in lower for p in ["severe dic", "active uncorrectable coagulopathy", "patient refused paracentesis", "refused tap"])
 
         para_span = None
-        for cand in ["diagnostic paracentesis", "paracentesis performed", "no paracentesis", "ascites"]:
+        for cand in ["diagnostic paracentesis", "paracentesis performed", "no paracentesis", "patient refused paracentesis", "ascites"]:
             sp = cls._find_span(raw, cand)
             if sp:
                 para_span = sp
@@ -247,9 +353,17 @@ class StructuredEvidenceExtractor:
                 assertion_status="EXCEPTION_IDENTIFIED",
                 certainty="DOCUMENTED",
                 evidence_span=para_span,
-                exception_notes="Severe uncorrectable coagulopathy or documented refusal."
+                exception_notes="Severe uncorrectable coagulopathy or documented informed patient refusal."
             ))
-            exceptions.append("Paracentesis contraindicated due to documented acute coagulopathy.")
+            normalized_events.append(NormalizedClinicalEvent(
+                concept="paracentesis",
+                status="EXCEPTION_IDENTIFIED",
+                certainty="DOCUMENTED",
+                exception_detected=True,
+                source_span=para_span,
+                clinical_note="Documented clinical contraindication (DIC) or informed refusal."
+            ))
+            exceptions.append("Paracentesis contraindicated due to documented acute coagulopathy or refusal.")
         elif para_performed or ("paracentesis" in lower and not para_negation):
             assertions.append(ClinicalAssertion(
                 concept="diagnostic_paracentesis",
@@ -257,12 +371,27 @@ class StructuredEvidenceExtractor:
                 certainty="DOCUMENTED",
                 evidence_span=para_span
             ))
+            normalized_events.append(NormalizedClinicalEvent(
+                concept="paracentesis",
+                status="PERFORMED",
+                certainty="DOCUMENTED",
+                source_span=para_span,
+                clinical_note="Diagnostic paracentesis executed and fluid analyzed."
+            ))
         elif para_negation or ("ascites" in lower and "paracentesis" not in lower):
             assertions.append(ClinicalAssertion(
                 concept="diagnostic_paracentesis",
                 assertion_status="NOT_DOCUMENTED",
                 certainty="DOCUMENTED",
                 evidence_span=para_span
+            ))
+            normalized_events.append(NormalizedClinicalEvent(
+                concept="paracentesis",
+                status="NOT_PERFORMED",
+                certainty="NEGATED",
+                negation_detected=True,
+                source_span=para_span,
+                clinical_note="Ascitic tap omitted in new/worsening ascites."
             ))
 
         # (d) Physician Bedside Critical Care Time Assertion
@@ -285,6 +414,14 @@ class StructuredEvidenceExtractor:
                     certainty="DOCUMENTED",
                     evidence_span=time_span
                 ))
+                normalized_events.append(NormalizedClinicalEvent(
+                    concept="critical_care_time",
+                    status="PERFORMED",
+                    certainty="DOCUMENTED",
+                    event_time_minutes=time_mins,
+                    source_span=time_span,
+                    clinical_note=f"Documented bedside critical care time ({time_mins}m) satisfies initial CPT 99291 threshold."
+                ))
             else:
                 assertions.append(ClinicalAssertion(
                     concept="critical_care_time_threshold",
@@ -292,10 +429,19 @@ class StructuredEvidenceExtractor:
                     event_timestamp_min=time_mins,
                     certainty="DOCUMENTED",
                     evidence_span=time_span,
-                    exception_notes=f"Documented direct time ({time_mins}m) is below statutory 30m threshold for CPT 99291."
+                    exception_notes=f"Documented direct time ({time_mins}m) is below the 30m threshold for CPT 99291."
+                ))
+                normalized_events.append(NormalizedClinicalEvent(
+                    concept="critical_care_time",
+                    status="NOT_PERFORMED",
+                    certainty="DOCUMENTED",
+                    event_time_minutes=time_mins,
+                    source_span=time_span,
+                    clinical_note=f"Documented direct time ({time_mins}m) below 30m minimum threshold."
                 ))
 
         evidence.clinical_assertions = assertions
+        evidence.normalized_events = normalized_events
         evidence.documented_exceptions = exceptions
 
         # 6. Procedural & Coding Predicates for Rule Engine
@@ -303,16 +449,17 @@ class StructuredEvidenceExtractor:
             "has_modifier_59": "-59" in raw or "modifier 59" in lower,
             "is_same_incision": any(t in lower for t in ["same incision", "same knee", "same compartment", "identical arthrotomy"]),
             "has_informed_consent": any(term in lower for term in ["informed consent", "consent obtained", "risks, benefits, and alternatives explained", "consent signed"]),
-            "has_radiograph_confirmed": (
-                any(a.concept == "chest_radiograph" and a.assertion_status in ["PERFORMED", "EXCEPTION_IDENTIFIED"] for a in assertions)
-                or (any(t in lower for t in ["chest x-ray", "cxr", "chest radiograph", "ct chest", "infiltrate confirmed"]) and not cxr_negation)
+            "has_radiograph_confirmed": any(
+                a.concept == "chest_radiograph" and a.assertion_status in ["PERFORMED", "EXCEPTION_IDENTIFIED"]
+                for a in assertions
             ),
-            "has_blood_cultures_drawn": (
-                any(a.concept == "blood_cultures" and a.assertion_status in ["PERFORMED", "EXCEPTION_IDENTIFIED"] for a in assertions)
-                or (bc_performed and not bc_negation)
+            "has_blood_cultures_drawn": any(
+                a.concept == "blood_cultures" and a.assertion_status in ["PERFORMED", "EXCEPTION_IDENTIFIED"]
+                for a in assertions
             ),
-            "has_paracentesis_performed": (
-                any(a.concept == "diagnostic_paracentesis" and a.assertion_status in ["PERFORMED", "EXCEPTION_IDENTIFIED"] for a in assertions)
+            "has_paracentesis_performed": any(
+                a.concept == "diagnostic_paracentesis" and a.assertion_status in ["PERFORMED", "EXCEPTION_IDENTIFIED"]
+                for a in assertions
             )
         }
         evidence.procedural_predicates = procedural_pred

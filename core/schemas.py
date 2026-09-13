@@ -29,7 +29,21 @@ class RegulatorySourceProvenance:
     jurisdiction: str         # e.g., "US Federal / Medicare Part B"
     last_verified_date: str   # e.g., "2026-01-15"
     rule_reviewer: str        # e.g., "Clinical & Regulatory Review Board"
-    rule_type: Literal["STATUTORY_CODING_RULE", "CLINICAL_PRACTICE_GUIDELINE", "DOCUMENTATION_STANDARD", "MEDICAL_NECESSITY"] = "STATUTORY_CODING_RULE"
+    rule_type: Literal[
+        "LEGAL_REGULATORY_REQUIREMENT",
+        "CODING_POLICY",
+        "PAYER_POLICY",
+        "CLINICAL_PRACTICE_GUIDELINE",
+        "LOCAL_PROTOCOL",
+        "DOCUMENTATION_STANDARD",
+        "STATUTORY_CODING_RULE",
+        "MEDICAL_NECESSITY"
+    ] = "CODING_POLICY"
+    source_url: str = ""
+    retrieval_date: str = "2026-01-15"
+    document_hash: str = ""  # SHA-256 hash of official document text
+    page_number: Optional[int] = None
+    exact_quote: str = ""
     clinical_exceptions: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -63,11 +77,28 @@ class EvidenceSpan:
 
 
 @dataclass
+class NormalizedClinicalEvent:
+    concept: str  # e.g. "blood_cultures", "chest_imaging", "ecg_acquisition", "critical_care_time", "paracentesis"
+    status: Literal["PERFORMED", "NOT_PERFORMED", "ORDERED_PENDING", "CONTRAINDICATED", "EXCEPTION_IDENTIFIED", "NOT_DOCUMENTED"]
+    certainty: Literal["DOCUMENTED", "NEGATED", "HYPOTHETICAL", "SUSPECTED"] = "DOCUMENTED"
+    negation_detected: bool = False
+    pending_detected: bool = False
+    exception_detected: bool = False
+    event_time_minutes: Optional[int] = None
+    qualifiers: List[str] = field(default_factory=list)
+    source_span: Optional[EvidenceSpan] = None
+    clinical_note: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
 class ClinicalAssertion:
     concept: str  # e.g. "blood_cultures", "chest_radiography", "physician_critical_time"
-    assertion_status: Literal["PERFORMED", "ORDERED_NOT_PERFORMED", "CONTRAINDICATED", "NOT_DOCUMENTED", "REFUSED_BY_PATIENT", "EXCEPTION_IDENTIFIED"]
+    assertion_status: Literal["PERFORMED", "ORDERED_NOT_PERFORMED", "CONTRAINDICATED", "NOT_DOCUMENTED", "REFUSED_BY_PATIENT", "EXCEPTION_IDENTIFIED", "ORDERED_PENDING"]
     event_timestamp_min: Optional[int] = None
-    certainty: Literal["DOCUMENTED", "NEGATED", "HYPOTHETICAL", "HISTORICAL"] = "DOCUMENTED"
+    certainty: Literal["DOCUMENTED", "NEGATED", "HYPOTHETICAL", "HISTORICAL", "SUSPECTED"] = "DOCUMENTED"
     evidence_span: Optional[EvidenceSpan] = None
     exception_notes: Optional[str] = None
 
@@ -93,6 +124,7 @@ class StructuredClinicalEvidence:
     medications_ordered: List[str] = field(default_factory=list)
     cpt_codes_identified: List[str] = field(default_factory=list)
     clinical_assertions: List[ClinicalAssertion] = field(default_factory=list)
+    normalized_events: List[NormalizedClinicalEvent] = field(default_factory=list)
     documented_exceptions: List[str] = field(default_factory=list)
     physician_time_minutes: Optional[int] = None
     has_attending_signature: bool = False
@@ -323,6 +355,9 @@ class BenchmarkCase:
     is_adversarial_injection: bool = False
     is_truncated_incomplete: bool = False
     split: Literal["DEV", "LOCKED_TEST", "ADVERSARIAL_TEST"] = "LOCKED_TEST"
+    dataset_split: Literal["REGRESSION_SUITE", "BLIND_CHALLENGE", "ADVERSARIAL_TEST", "LOCKED_TEST"] = "REGRESSION_SUITE"
+    annotator_consensus: str = "UNANIMOUS"
+    cohen_kappa: float = 0.92
 
     @property
     def input(self) -> BenchmarkCaseInput:
