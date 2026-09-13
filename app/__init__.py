@@ -1,0 +1,3 @@
+"""
+MedicalAuditor Application Package.
+"""

@@ -1,20 +1,38 @@
 """
 Structured Evidence Extraction Engine.
 Extracts verifiable clinical facts, timestamps, quantitative vitals, procedures,
-medications, attending durations, and detects incomplete or truncated charts.
-Enforces strict schema validation without relying solely on fragile regexes.
+medications, attending durations, assertion statuses (performed, omitted, contraindicated),
+and detects incomplete, truncated, or contradictory charts.
+Enforces strict schema validation with character-span provenance.
 """
 
 import re
-from typing import Dict, Any, List, Optional
-from core.schemas import StructuredClinicalEvidence, EvidenceSpan
+from typing import Dict, Any, List, Optional, Tuple
+from core.schemas import StructuredClinicalEvidence, EvidenceSpan, ClinicalAssertion
 
 
 class StructuredEvidenceExtractor:
     """
     Extracts structured clinical evidence and locates character spans
-    for verifiable audit grounding.
+    for verifiable audit grounding, asserting status and clinical exceptions.
     """
+
+    @classmethod
+    def _find_span(cls, text: str, substring: str) -> Optional[EvidenceSpan]:
+        """Helper to find exact character coordinates of a substring in text."""
+        if not substring or not text:
+            return None
+        idx = text.lower().find(substring.lower())
+        if idx != -1:
+            end = idx + len(substring)
+            return EvidenceSpan(
+                source_field="clinical_record",
+                exact_quote=text[idx:end],
+                start_char=idx,
+                end_char=end,
+                confidence=1.0
+            )
+        return None
 
     @classmethod
     def extract_evidence(cls, text: str) -> StructuredClinicalEvidence:
@@ -23,14 +41,19 @@ class StructuredEvidenceExtractor:
 
         evidence = StructuredClinicalEvidence()
 
-        # Check for truncated or severely deficient chart (< 120 chars or missing clinical substance)
+        # 1. Minimum Viable Chart Check
         words = raw.split()
         if len(raw.strip()) < 120 or len(words) < 20:
             evidence.is_truncated_or_incomplete = True
-            evidence.missing_prerequisites.append("Minimum viable clinical chart length not met (<120 characters).")
+            evidence.missing_prerequisites.append(
+                "Minimum viable clinical chart length not met (<120 characters / <20 tokens)."
+            )
 
-        # Patient Name Extraction
-        pat_match = re.search(r'(?:Patient\s*Name|Patient|Name)\s*[:\-]\s*([A-Za-z\s\.\,\'-]+?)(?:\n|\r|\(|\d|$)', raw, re.IGNORECASE)
+        # 2. Patient Demographics & Facility
+        pat_match = re.search(
+            r'(?:Patient\s*Name|Patient|Name)\s*[:\-]\s*([A-Za-z\s\.\,\'-]+?)(?:\n|\r|\(|\d|$)',
+            raw, re.IGNORECASE
+        )
         if pat_match and len(pat_match.group(1).strip()) > 2:
             evidence.patient_name = pat_match.group(1).strip()
             evidence.extracted_spans.append(EvidenceSpan(
@@ -40,8 +63,10 @@ class StructuredEvidenceExtractor:
                 end_char=pat_match.end()
             ).to_dict())
 
-        # Attending Physician Extraction
-        doc_match = re.search(r'(?:Attending\s*MD|Attending\s*Physician|Physician|Doctor|Surgeon|Provider)\s*[:\-]\s*([A-Za-z\s\.\,\'-]+?)(?:\n|\r|\(|$)', raw, re.IGNORECASE)
+        doc_match = re.search(
+            r'(?:Attending\s*MD|Attending\s*Physician|Physician|Doctor|Surgeon|Provider)\s*[:\-]\s*([A-Za-z\s\.\,\'-]+?)(?:\n|\r|\(|$)',
+            raw, re.IGNORECASE
+        )
         if doc_match and len(doc_match.group(1).strip()) > 2:
             evidence.doctor_name = doc_match.group(1).strip()
             evidence.extracted_spans.append(EvidenceSpan(
@@ -51,21 +76,31 @@ class StructuredEvidenceExtractor:
                 end_char=doc_match.end()
             ).to_dict())
 
-        # Hospital / Facility Extraction
-        hosp_match = re.search(r'(?:Facility\s*Location|Facility|Hospital|Medical\s*Center|Clinic)\s*[:\-]\s*([^\n\r;|]+)', raw, re.IGNORECASE)
+        hosp_match = re.search(
+            r'(?:Facility\s*Location|Facility|Hospital|Medical\s*Center|Clinic)\s*[:\-]\s*([^\n\r;|]+)',
+            raw, re.IGNORECASE
+        )
         if hosp_match and len(hosp_match.group(1).strip()) > 2:
             evidence.hospital_name = hosp_match.group(1).strip()
 
-        # Vitals extraction
+        # 3. Objective Vitals Panel
         vitals_dict = {}
         bp_match = re.search(r'(?:BP|Blood\s*Pressure)\s*[:\-]?\s*(\d{2,3}/\d{2,3})', raw, re.IGNORECASE)
         if bp_match:
             vitals_dict["BP"] = bp_match.group(1)
-        
+            evidence.extracted_spans.append(EvidenceSpan(
+                source_field="vitals.BP", exact_quote=bp_match.group(0),
+                start_char=bp_match.start(), end_char=bp_match.end()
+            ).to_dict())
+
         hr_match = re.search(r'(?:HR|Heart\s*Rate|Pulse)\s*[:\-]?\s*(\d{2,3})\s*(?:bpm)?', raw, re.IGNORECASE)
         if hr_match:
             vitals_dict["HR"] = f"{hr_match.group(1)} bpm"
-            
+            evidence.extracted_spans.append(EvidenceSpan(
+                source_field="vitals.HR", exact_quote=hr_match.group(0),
+                start_char=hr_match.start(), end_char=hr_match.end()
+            ).to_dict())
+
         spo2_match = re.search(r'(?:SpO2|Oxygen\s*Saturation|O2\s*Sat)\s*[:\-]?\s*(\d{2,3})\s*%', raw, re.IGNORECASE)
         if spo2_match:
             vitals_dict["SpO2"] = f"{spo2_match.group(1)}%"
@@ -76,15 +111,213 @@ class StructuredEvidenceExtractor:
 
         evidence.vitals_recorded = vitals_dict
 
-        # Physician Time extraction (e.g. 12 minutes bedside, 35 min critical care)
-        time_match = re.search(r'(\d{1,3})\s*(?:minutes|mins|min)\s*(?:bedside|face-to-face|direct|total|critical|evaluation|care)', raw, re.IGNORECASE)
+        # 4. Physician Bedside Duration
+        time_match = re.search(
+            r'(\d{1,3})\s*(?:minutes|mins|min)\s*(?:bedside|face-to-face|direct|total|critical|evaluation|care)',
+            raw, re.IGNORECASE
+        )
         if time_match:
             try:
                 evidence.physician_time_minutes = int(time_match.group(1))
+                evidence.extracted_spans.append(EvidenceSpan(
+                    source_field="physician_time", exact_quote=time_match.group(0),
+                    start_char=time_match.start(), end_char=time_match.end()
+                ).to_dict())
             except ValueError:
                 pass
 
-        # Procedures Identified
+        # 5. Concept Assertions with Status, Temporality, and Exceptions
+        assertions: List[ClinicalAssertion] = []
+        exceptions: List[str] = []
+
+        # (a) Blood Cultures Assertion (Hour-1 Sepsis Standard)
+        bc_negation = any(phrase in lower for phrase in [
+            "cultures were not drawn", "without prior blood culture", "blood cultures omitted",
+            "no blood culture", "blood cultures pending order not collected"
+        ])
+        bc_contraindicated = any(phrase in lower for phrase in [
+            "difficult vascular access - antibiotic given immediately",
+            "antibiotic delayed risk outweighed blood draw",
+            "stat abx prioritized over line placement"
+        ])
+        bc_performed = ("blood culture" in lower or "cultures drawn" in lower) and not bc_negation
+
+        bc_span = None
+        for cand in ["blood cultures drawn", "blood culture", "blood cultures were not drawn", "without prior blood culture"]:
+            sp = cls._find_span(raw, cand)
+            if sp:
+                bc_span = sp
+                break
+
+        if bc_contraindicated:
+            assertions.append(ClinicalAssertion(
+                concept="blood_cultures",
+                assertion_status="EXCEPTION_IDENTIFIED",
+                certainty="DOCUMENTED",
+                evidence_span=bc_span,
+                exception_notes="Clinician documented emergent risk prioritization or difficult access exception."
+            ))
+            exceptions.append("Emergency vascular access difficulty documented for blood culture omission.")
+        elif bc_performed:
+            assertions.append(ClinicalAssertion(
+                concept="blood_cultures",
+                assertion_status="PERFORMED",
+                certainty="DOCUMENTED",
+                evidence_span=bc_span
+            ))
+        elif bc_negation:
+            assertions.append(ClinicalAssertion(
+                concept="blood_cultures",
+                assertion_status="ORDERED_NOT_PERFORMED",
+                certainty="NEGATED",
+                evidence_span=bc_span
+            ))
+        else:
+            assertions.append(ClinicalAssertion(
+                concept="blood_cultures",
+                assertion_status="NOT_DOCUMENTED",
+                certainty="DOCUMENTED"
+            ))
+
+        # (b) Chest Radiograph Assertion (Pneumonia Protocol)
+        cxr_negation = any(phrase in lower for phrase in [
+            "no chest x-ray", "no imaging", "omitted chest x-ray", "radiograph omitted"
+        ])
+        cxr_exception = any(phrase in lower for phrase in [
+            "pregnancy - radiation shielding", "bedside ultrasound lung consolidation confirmed",
+            "emergent intubation prevented immediate x-ray"
+        ])
+        cxr_performed = any(phrase in lower for phrase in [
+            "chest x-ray", "cxr", "chest radiograph", "ct chest", "infiltrate confirmed",
+            "consolidation on x-ray", "lobar infiltrate"
+        ]) and not cxr_negation
+
+        cxr_span = None
+        for cand in ["chest x-ray", "chest radiograph", "infiltrate confirmed", "ct chest", "no chest x-ray"]:
+            sp = cls._find_span(raw, cand)
+            if sp:
+                cxr_span = sp
+                break
+
+        if cxr_exception:
+            assertions.append(ClinicalAssertion(
+                concept="chest_radiograph",
+                assertion_status="EXCEPTION_IDENTIFIED",
+                certainty="DOCUMENTED",
+                evidence_span=cxr_span,
+                exception_notes="Valid clinical exception or diagnostic ultrasound modality documented."
+            ))
+            exceptions.append("Diagnostic imaging alternate / exception documented for respiratory presentation.")
+        elif cxr_performed:
+            assertions.append(ClinicalAssertion(
+                concept="chest_radiograph",
+                assertion_status="PERFORMED",
+                certainty="DOCUMENTED",
+                evidence_span=cxr_span
+            ))
+        elif cxr_negation:
+            assertions.append(ClinicalAssertion(
+                concept="chest_radiograph",
+                assertion_status="ORDERED_NOT_PERFORMED",
+                certainty="NEGATED",
+                evidence_span=cxr_span
+            ))
+        else:
+            assertions.append(ClinicalAssertion(
+                concept="chest_radiograph",
+                assertion_status="NOT_DOCUMENTED",
+                certainty="DOCUMENTED"
+            ))
+
+        # (c) Diagnostic Paracentesis Assertion (Cirrhosis Protocol)
+        para_performed = any(p in lower for p in ["paracentesis performed", "diagnostic paracentesis completed", "fluid sent for cell count"])
+        para_negation = any(p in lower for p in ["paracentesis omitted", "no paracentesis", "paracentesis not done", "ascitic tap not performed"])
+        para_exception = any(p in lower for p in ["severe dic", "active uncorrectable coagulopathy", "patient refused paracentesis"])
+
+        para_span = None
+        for cand in ["diagnostic paracentesis", "paracentesis performed", "no paracentesis", "ascites"]:
+            sp = cls._find_span(raw, cand)
+            if sp:
+                para_span = sp
+                break
+
+        if para_exception:
+            assertions.append(ClinicalAssertion(
+                concept="diagnostic_paracentesis",
+                assertion_status="EXCEPTION_IDENTIFIED",
+                certainty="DOCUMENTED",
+                evidence_span=para_span,
+                exception_notes="Severe uncorrectable coagulopathy or documented refusal."
+            ))
+            exceptions.append("Paracentesis contraindicated due to documented acute coagulopathy.")
+        elif para_performed or ("paracentesis" in lower and not para_negation):
+            assertions.append(ClinicalAssertion(
+                concept="diagnostic_paracentesis",
+                assertion_status="PERFORMED",
+                certainty="DOCUMENTED",
+                evidence_span=para_span
+            ))
+        elif para_negation or ("ascites" in lower and "paracentesis" not in lower):
+            assertions.append(ClinicalAssertion(
+                concept="diagnostic_paracentesis",
+                assertion_status="NOT_DOCUMENTED",
+                certainty="DOCUMENTED",
+                evidence_span=para_span
+            ))
+
+        # (d) Physician Bedside Critical Care Time Assertion
+        time_mins = evidence.physician_time_minutes
+        time_span = None
+        if time_match:
+            time_span = EvidenceSpan(
+                source_field="physician_time",
+                exact_quote=time_match.group(0),
+                start_char=time_match.start(),
+                end_char=time_match.end()
+            )
+
+        if time_mins is not None:
+            if time_mins >= 30:
+                assertions.append(ClinicalAssertion(
+                    concept="critical_care_time_threshold",
+                    assertion_status="PERFORMED",
+                    event_timestamp_min=time_mins,
+                    certainty="DOCUMENTED",
+                    evidence_span=time_span
+                ))
+            else:
+                assertions.append(ClinicalAssertion(
+                    concept="critical_care_time_threshold",
+                    assertion_status="ORDERED_NOT_PERFORMED",
+                    event_timestamp_min=time_mins,
+                    certainty="DOCUMENTED",
+                    evidence_span=time_span,
+                    exception_notes=f"Documented direct time ({time_mins}m) is below statutory 30m threshold for CPT 99291."
+                ))
+
+        evidence.clinical_assertions = assertions
+        evidence.documented_exceptions = exceptions
+
+        # 6. Procedural & Coding Predicates for Rule Engine
+        procedural_pred = {
+            "has_modifier_59": "-59" in raw or "modifier 59" in lower,
+            "is_same_incision": any(t in lower for t in ["same incision", "same knee", "same compartment", "identical arthrotomy"]),
+            "has_informed_consent": any(term in lower for term in ["informed consent", "consent obtained", "risks, benefits, and alternatives explained", "consent signed"]),
+            "has_radiograph_confirmed": (
+                any(a.concept == "chest_radiograph" and a.assertion_status in ["PERFORMED", "EXCEPTION_IDENTIFIED"] for a in assertions)
+                or (any(t in lower for t in ["chest x-ray", "cxr", "chest radiograph", "ct chest", "infiltrate confirmed"]) and not cxr_negation)
+            ),
+            "has_blood_cultures_drawn": (
+                any(a.concept == "blood_cultures" and a.assertion_status in ["PERFORMED", "EXCEPTION_IDENTIFIED"] for a in assertions)
+                or (bc_performed and not bc_negation)
+            ),
+            "has_paracentesis_performed": (
+                any(a.concept == "diagnostic_paracentesis" and a.assertion_status in ["PERFORMED", "EXCEPTION_IDENTIFIED"] for a in assertions)
+            )
+        }
+        evidence.procedural_predicates = procedural_pred
+
+        # 7. Procedures Identified
         procedures = []
         if "paracentesis" in lower:
             procedures.append("Diagnostic / Therapeutic Paracentesis")
@@ -100,61 +333,14 @@ class StructuredEvidenceExtractor:
             procedures.append("Knee Arthroscopy & Meniscectomy")
         evidence.procedures_identified = procedures
 
-        # Lab values extraction
-        labs = {}
-        troponin_m = re.search(r'(?:Troponin|cTn|hs-cTn)\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*(?:ng/mL|ng/L|pg/mL)?', raw, re.IGNORECASE)
-        if troponin_m:
-            labs["troponin"] = float(troponin_m.group(1))
-        inr_m = re.search(r'INR\s*[:\-]?\s*(\d+(?:\.\d+)?)', raw, re.IGNORECASE)
-        if inr_m:
-            labs["inr"] = float(inr_m.group(1))
-        bili_m = re.search(r'(?:Bilirubin|Total\s*Bilirubin)\s*[:\-]?\s*(\d+(?:\.\d+)?)', raw, re.IGNORECASE)
-        if bili_m:
-            labs["bilirubin"] = float(bili_m.group(1))
-        creat_m = re.search(r'(?:Creatinine|Serum\s*Creatinine)\s*[:\-]?\s*(\d+(?:\.\d+)?)', raw, re.IGNORECASE)
-        if creat_m:
-            labs["creatinine"] = float(creat_m.group(1))
-        meld_m = re.search(r'(?:MELD|MELD-Na)\s*[:\-]?\s*(\d{1,2})', raw, re.IGNORECASE)
-        if meld_m:
-            labs["meld_score"] = int(meld_m.group(1))
-        evidence.lab_values = labs
-
-        # Medications Identified
+        # 7b. Medications Identified
         meds = []
-        med_keywords = ["aspirin", "heparin", "ceftriaxone", "azithromycin", "vancomycin", "furosemide", "spironolactone", "lactulose", "rifaximin", "propofol", "fentanyl", "norepinephrine", "vasopressin"]
-        for med in med_keywords:
-            if med in lower:
-                meds.append(med.capitalize())
+        for med_name in ["Ceftriaxone", "Vancomycin", "Cefepime", "Zosyn", "Piperacillin", "Azithromycin", "Levofloxacin", "Meropenem", "Metronidazole"]:
+            if med_name.lower() in lower:
+                meds.append(med_name)
         evidence.medications_ordered = meds
 
-        # Timing Milestones
-        milestones = {}
-        ecg_time_m = re.search(r'(?:ECG|EKG)\s*(?:acquired|obtained|done|within)\s*(?:within|at|in)?\s*(\d{1,2})\s*min', raw, re.IGNORECASE)
-        if ecg_time_m:
-            milestones["door_to_ecg_minutes"] = int(ecg_time_m.group(1))
-        elif "ecg delayed" in lower or "delayed ecg" in lower:
-            milestones["door_to_ecg_minutes"] = 45
-        
-        balloon_time_m = re.search(r'(?:Door-to-balloon|D2B)\s*[:\-]?\s*(\d{1,3})\s*min', raw, re.IGNORECASE)
-        if balloon_time_m:
-            milestones["door_to_balloon_minutes"] = int(balloon_time_m.group(1))
-        
-        if evidence.physician_time_minutes is not None:
-            milestones["physician_bedside_minutes"] = evidence.physician_time_minutes
-            
-        evidence.timing_milestones = milestones
-
-        # Procedural and Coding Predicates for Rule Evaluation
-        procedural_pred = {
-            "has_modifier_59": "-59" in raw or "modifier 59" in lower,
-            "is_same_incision": any(t in lower for t in ["same incision", "same knee", "same compartment", "identical arthrotomy"]),
-            "has_informed_consent": any(term in lower for term in ["informed consent", "consent obtained", "risks, benefits, and alternatives explained", "consent signed"]),
-            "has_radiograph_confirmed": any(t in lower for t in ["chest x-ray", "cxr", "chest radiograph", "ct chest", "infiltrate confirmed"]) and not any(t in lower for t in ["no chest x-ray", "no imaging", "omitted chest x-ray"]),
-            "has_blood_cultures_drawn": ("blood culture" in lower or "cultures drawn" in lower) and not any(t in lower for t in ["no blood culture", "blood cultures omitted", "without prior blood culture", "cultures were not drawn"]),
-        }
-        evidence.procedural_predicates = procedural_pred
-
-        # CPT Codes Identified
+        # 8. CPT Codes Identified
         cpt_matches = re.findall(r'\b(992\d{2}|929\d{2}|432\d{2}|490\d{2}|298\d{2}|365\d{2}|315\d{2})\b', raw)
         evidence.cpt_codes_identified = list(set(cpt_matches))
         evidence.coding_predicates = {
@@ -165,14 +351,14 @@ class StructuredEvidenceExtractor:
             "cpt_99285_ed_lvl5": "99285" in cpt_matches or "99285" in raw,
         }
 
-        # Signatures & Attestation Verification
-        has_sig = any(term in lower for term in ["electronically signed", "authenticated by", "signature:", "signed by", "dr.", "md,", "do,"])
+        # 9. Signatures & Attestation Verification
+        has_sig = any(term in lower for term in [
+            "electronically signed", "authenticated by", "signature:", "signed by", "dr.", "md,", "do,"
+        ])
         evidence.has_attending_signature = has_sig
-
-        # Informed Consent Verification
         evidence.has_informed_consent = procedural_pred["has_informed_consent"]
 
-        # Missing Prerequisites Check
+        # 10. Missing Prerequisites Check
         if not vitals_dict and not evidence.is_truncated_or_incomplete:
             evidence.missing_prerequisites.append("Objective Vital Signs panel absent from encounter record.")
         if not evidence.has_attending_signature:

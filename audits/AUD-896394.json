@@ -1,0 +1,35 @@
+{
+  "id": "AUD-896394",
+  "case_id": "AUD-896394",
+  "patientName": "Unknown / Not documented",
+  "doctorName": "Unknown / Not documented",
+  "hospitalName": "Unknown / Not documented",
+  "department": "Inpatient Unit",
+  "doctorSpecialization": "General Medicine",
+  "complianceScore": 100,
+  "primaryScore": 100,
+  "clinicalScore": 100,
+  "billingScore": 100,
+  "documentationScore": 100,
+  "timelineScore": 90,
+  "verdict": "Pass",
+  "riskClassification": "STANDARD_MONITORING",
+  "findings": [],
+  "explainedTerms": [
+    {
+      "term": "CPT 99291",
+      "definition": "Critical care evaluation and management, first 30-74 minutes requiring direct continuous physician engagement."
+    },
+    {
+      "term": "Modifier -59",
+      "definition": "Distinct procedural service identifier indicating non-overlapping anatomical site or distinct operative encounter."
+    },
+    {
+      "term": "Surviving Sepsis Bundle",
+      "definition": "Statutory protocol requiring blood cultures, serum lactate, and IV antibiotics within 3 hours of sepsis identification."
+    }
+  ],
+  "reportMarkdown": "# MedicalAuditor V2.1 Forensic Report\n**Audit Identifier:** `AUD-896394`  \n**Evaluation Date:** 2026-09-13 13:24:56 UTC  \n**Patient Identifier:** Unknown / Not documented  \n**Attending Physician:** Unknown / Not documented  \n**Facility / Location:** Unknown / Not documented  \n**Specialty:** General Medicine  \n\n---\n\n## Executive Audit Summary\n- **Overall Forensic Compliance Score:** **100 / 100**\n- **Regulatory Determination:** **PASS**\n- **Independent Verifier Status:** All findings validated against textual span grounding and statutory rules.\n\n---\n\n## Identified Deficiencies & Evidence Grounding\n_No compliance breaches or standard-of-care violations detected._\n\n\n---\n\n## Corrective Action & Recommendations\n1. Ensure all documented procedure times are corroborated by concurrent anesthesia and nursing flowsheets.\n2. Comply strictly with CMS NCCI unbundling prohibitions when billing multiple procedural codes for the same operative field.\n3. In suspected sepsis encounters, prioritize blood cultures prior to antibiotic administration, unless documented difficult access requires emergency life-saving exception.\n",
+  "latency_ms": 0.3,
+  "timestamp": "2026-09-13T13:24:56Z"
+}

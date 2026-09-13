@@ -1,17 +1,41 @@
 """
 Deterministic Rule Validation Engine.
 Executes hard, mathematical and chronological rules with zero hallucination risk.
-Deterministic rules produce verifiable boolean outcomes backed by CMS, AMA CPT, and AHA/ACC guidelines.
+Deterministic rules produce verifiable boolean outcomes backed by CMS, AMA CPT, and AHA/ACC guidelines,
+distinguishing statutory coding rules from clinical practice guidelines, and evaluating clinical exceptions.
 """
 
-from typing import List, Dict, Any, Tuple
-from core.schemas import DeterministicRuleCheck, StructuredClinicalEvidence
+from typing import List, Dict, Any, Optional
+from core.schemas import DeterministicRuleCheck, StructuredClinicalEvidence, RegulatorySourceProvenance
+from retrieval.guidelines_db import OFFICIAL_REGULATORY_DOCUMENTS
 
 
 class DeterministicRuleValidator:
     """
-    Evaluates clinical and billing records against deterministic regulatory constraints.
+    Evaluates clinical and billing records against deterministic regulatory constraints
+    with source provenance and clinical exception handling.
     """
+
+    @classmethod
+    def _get_provenance(cls, doc_id: str) -> Optional[RegulatorySourceProvenance]:
+        for doc in OFFICIAL_REGULATORY_DOCUMENTS:
+            if doc.get("id") == doc_id and "provenance" in doc:
+                p = doc["provenance"]
+                return RegulatorySourceProvenance(
+                    source_organization=p.get("source_organization", "Regulatory Body"),
+                    document_title=p.get("document_title", ""),
+                    version_or_edition=p.get("version_or_edition", ""),
+                    publication_date=p.get("publication_date", ""),
+                    effective_date=p.get("effective_date", ""),
+                    section=p.get("section", ""),
+                    canonical_identifier=p.get("canonical_identifier", ""),
+                    jurisdiction=p.get("jurisdiction", ""),
+                    last_verified_date=p.get("last_verified_date", ""),
+                    rule_reviewer=p.get("rule_reviewer", ""),
+                    rule_type=p.get("rule_type", "STATUTORY_CODING_RULE"),
+                    clinical_exceptions=p.get("clinical_exceptions", [])
+                )
+        return None
 
     @classmethod
     def validate_rules(cls, text: str, evidence: StructuredClinicalEvidence) -> List[DeterministicRuleCheck]:
@@ -23,8 +47,12 @@ class DeterministicRuleValidator:
         procedural = evidence.procedural_predicates or {}
         timing = evidence.timing_milestones or {}
         labs = evidence.lab_values or {}
+        assertions = {a.concept: a for a in evidence.clinical_assertions}
+        exceptions = evidence.documented_exceptions or []
 
         # RULE 1: CPT 99291 Critical Care Time Requirement (≥30 minutes face-to-face)
+        # Type: STATUTORY_CODING_RULE
+        prov_99291 = cls._get_provenance("DOC-AMA-CPT-99291")
         if coding.get("cpt_99291_critical_care") or "99291" in raw or "critical care" in lower:
             physician_time = evidence.physician_time_minutes
             if physician_time is not None and physician_time < 30:
@@ -38,7 +66,9 @@ class DeterministicRuleValidator:
                     status="VIOLATED",
                     severity="High",
                     penalty_score=35,
-                    reproducible_rule_logic="ASSERT physician_time_minutes >= 30 WHEN cpt_code == '99291'"
+                    reproducible_rule_logic="ASSERT physician_time_minutes >= 30 WHEN cpt_code == '99291'",
+                    rule_type="STATUTORY_CODING_RULE",
+                    provenance=prov_99291
                 ))
             elif physician_time is not None and physician_time >= 30:
                 results.append(DeterministicRuleCheck(
@@ -51,16 +81,39 @@ class DeterministicRuleValidator:
                     status="PASSED",
                     severity="Low",
                     penalty_score=0,
-                    reproducible_rule_logic="ASSERT physician_time_minutes >= 30 WHEN cpt_code == '99291'"
+                    reproducible_rule_logic="ASSERT physician_time_minutes >= 30 WHEN cpt_code == '99291'",
+                    rule_type="STATUTORY_CODING_RULE",
+                    provenance=prov_99291
                 ))
 
-        # RULE 2: Sepsis-3 3-Hour Bundle Sequence (Blood cultures before empiric antibiotics)
-        has_abx = any(m in ["Ceftriaxone", "Vancomycin", "Cefepime", "Zosyn", "Piperacillin", "Azithromycin"] for m in evidence.medications_ordered) or "antibiotic" in lower
+        # RULE 2: Sepsis-3 Bundle Sequence (Blood cultures before empiric antibiotics)
+        # Type: CLINICAL_PRACTICE_GUIDELINE (with clinical exceptions for difficult access or emergent threat)
+        prov_sepsis = cls._get_provenance("DOC-SURVIVING-SEPSIS")
+        has_abx = (
+            any(m in ["Ceftriaxone", "Vancomycin", "Cefepime", "Zosyn", "Piperacillin", "Azithromycin"] for m in evidence.medications_ordered)
+            or any(abx in lower for abx in ["ceftriaxone", "vancomycin", "cefepime", "zosyn", "piperacillin", "azithromycin", "antibiotic", "antibiotics"])
+        )
         if "sepsis" in lower or ("fever" in lower and has_abx):
+            bc_assertion = assertions.get("blood_cultures")
             has_bcx_drawn = procedural.get("has_blood_cultures_drawn", False)
             
-            # Check if antibiotics were given with missing/omitted blood cultures
-            if has_abx and not has_bcx_drawn and ("pneumonia" in lower or "sepsis" in lower or "bacteremia" in lower or "fever" in lower):
+            if bc_assertion and bc_assertion.assertion_status == "EXCEPTION_IDENTIFIED":
+                results.append(DeterministicRuleCheck(
+                    rule_id="RULE-DET-02",
+                    rule_name="Sepsis Bundle Clinical Exception Applied",
+                    authority="Surviving Sepsis Campaign Guidelines 2026 §Hour-1 Bundle",
+                    citation_code="SSC-GUIDELINE-2026-EXCEPTION",
+                    expected_constraint="Blood cultures prior to antimicrobials unless emergency threat or severe access limitation.",
+                    observed_fact=f"Clinical exception documented: {bc_assertion.exception_notes or 'Difficult access priority.'}",
+                    status="CLINICAL_EXCEPTION_APPLIED",
+                    severity="Low",
+                    penalty_score=0,
+                    reproducible_rule_logic="IF exception_documented THEN status = EXCEPTION_APPLIED",
+                    rule_type="CLINICAL_PRACTICE_GUIDELINE",
+                    provenance=prov_sepsis,
+                    clinical_exception_noted=bc_assertion.exception_notes
+                ))
+            elif has_abx and not has_bcx_drawn and ("pneumonia" in lower or "sepsis" in lower or "bacteremia" in lower or "fever" in lower):
                 results.append(DeterministicRuleCheck(
                     rule_id="RULE-DET-02",
                     rule_name="Sepsis-3 Bundle Sequence Infraction",
@@ -71,10 +124,14 @@ class DeterministicRuleValidator:
                     status="VIOLATED",
                     severity="High",
                     penalty_score=25,
-                    reproducible_rule_logic="ASSERT blood_cultures_drawn_timestamp < antibiotic_admin_timestamp"
+                    reproducible_rule_logic="ASSERT blood_cultures_drawn_timestamp < antibiotic_admin_timestamp",
+                    rule_type="CLINICAL_PRACTICE_GUIDELINE",
+                    provenance=prov_sepsis
                 ))
 
         # RULE 3: NCCI Modifier -59 / -X{EPSU} Procedural Unbundling on Same Anatomical Site
+        # Type: STATUTORY_CODING_RULE
+        prov_ncci = cls._get_provenance("DOC-CMS-NCCI-MOD59")
         if procedural.get("has_modifier_59") or "-59" in raw or "modifier 59" in lower:
             is_same_site = procedural.get("is_same_incision", False) or "same incision" in lower or "same knee" in lower
             if is_same_site:
@@ -88,10 +145,14 @@ class DeterministicRuleValidator:
                     status="VIOLATED",
                     severity="High",
                     penalty_score=30,
-                    reproducible_rule_logic="ASSERT anatomical_site_A != anatomical_site_B WHEN modifier == '-59'"
+                    reproducible_rule_logic="ASSERT anatomical_site_A != anatomical_site_B WHEN modifier == '-59'",
+                    rule_type="STATUTORY_CODING_RULE",
+                    provenance=prov_ncci
                 ))
 
         # RULE 4: ACS 10-Minute ECG Acquisition Protocol
+        # Type: CLINICAL_PRACTICE_GUIDELINE
+        prov_ncd = cls._get_provenance("DOC-CMS-NCD-20.4")
         if "stemi" in lower or "chest pain" in lower or "cardiac arrest" in lower or "troponin" in labs:
             door_to_ecg = timing.get("door_to_ecg_minutes")
             if door_to_ecg is not None:
@@ -106,7 +167,9 @@ class DeterministicRuleValidator:
                         status="VIOLATED",
                         severity="Critical",
                         penalty_score=40,
-                        reproducible_rule_logic="ASSERT door_to_ecg_minutes <= 10 WHEN chief_complaint == 'Chest Pain'"
+                        reproducible_rule_logic="ASSERT door_to_ecg_minutes <= 10 WHEN chief_complaint == 'Chest Pain'",
+                        rule_type="CLINICAL_PRACTICE_GUIDELINE",
+                        provenance=prov_ncd
                     ))
                 else:
                     results.append(DeterministicRuleCheck(
@@ -119,10 +182,14 @@ class DeterministicRuleValidator:
                         status="PASSED",
                         severity="Low",
                         penalty_score=0,
-                        reproducible_rule_logic="ASSERT door_to_ecg_minutes <= 10"
+                        reproducible_rule_logic="ASSERT door_to_ecg_minutes <= 10",
+                        rule_type="CLINICAL_PRACTICE_GUIDELINE",
+                        provenance=prov_ncd
                     ))
 
         # RULE 5: Informed Consent & Surgical Site Verification
+        # Type: DOCUMENTATION_STANDARD
+        prov_aaos = cls._get_provenance("DOC-AAOS-ARTHROPLASTY")
         is_surgical = bool(evidence.procedures_identified) or any(t in lower for t in ["surgery", "operative", "resection", "arthroscopy"])
         has_consent = procedural.get("has_informed_consent", False)
         if is_surgical and not has_consent:
@@ -136,13 +203,34 @@ class DeterministicRuleValidator:
                 status="VIOLATED",
                 severity="High",
                 penalty_score=25,
-                reproducible_rule_logic="ASSERT informed_consent_documented == TRUE WHEN procedure_type == 'Surgical'"
+                reproducible_rule_logic="ASSERT informed_consent_documented == TRUE WHEN procedure_type == 'Surgical'",
+                rule_type="DOCUMENTATION_STANDARD",
+                provenance=prov_aaos
             ))
 
         # RULE 6: Diagnostic Radiographic Confirmation for Inpatient Pneumonia
+        # Type: CLINICAL_PRACTICE_GUIDELINE
+        prov_cap = cls._get_provenance("DOC-ATS-IDSA-PNEUMONIA")
         if "pneumonia" in lower and ("admitted" in lower or "inpatient" in lower):
+            cxr_assertion = assertions.get("chest_radiograph")
             has_imaging = procedural.get("has_radiograph_confirmed", False)
-            if not has_imaging and ("no chest x-ray" in lower or "without radiographic" in lower or "no imaging" in lower):
+            if cxr_assertion and cxr_assertion.assertion_status == "EXCEPTION_IDENTIFIED":
+                results.append(DeterministicRuleCheck(
+                    rule_id="RULE-DET-07",
+                    rule_name="Pneumonia Imaging Exception Applied",
+                    authority="ATS/IDSA Community-Acquired Pneumonia Guidelines §3.1",
+                    citation_code="ATS-IDSA-CAP-EXCEPTION",
+                    expected_constraint="Chest imaging required unless clinical exception or alternate bedside ultrasound documented.",
+                    observed_fact=f"Clinical exception documented: {cxr_assertion.exception_notes or 'Bedside ultrasound / acute stabilization exception.'}",
+                    status="CLINICAL_EXCEPTION_APPLIED",
+                    severity="Low",
+                    penalty_score=0,
+                    reproducible_rule_logic="IF exception_documented THEN status = EXCEPTION_APPLIED",
+                    rule_type="CLINICAL_PRACTICE_GUIDELINE",
+                    provenance=prov_cap,
+                    clinical_exception_noted=cxr_assertion.exception_notes
+                ))
+            elif not has_imaging and ("no chest x-ray" in lower or "without radiographic" in lower or "no imaging" in lower):
                 results.append(DeterministicRuleCheck(
                     rule_id="RULE-DET-07",
                     rule_name="Unconfirmed Pneumonia Diagnosis Without Radiography",
@@ -153,10 +241,13 @@ class DeterministicRuleValidator:
                     status="VIOLATED",
                     severity="High",
                     penalty_score=30,
-                    reproducible_rule_logic="ASSERT chest_radiography_documented == TRUE WHEN diagnosis == 'Pneumonia'"
+                    reproducible_rule_logic="ASSERT chest_radiography_documented == TRUE WHEN diagnosis == 'Pneumonia'",
+                    rule_type="CLINICAL_PRACTICE_GUIDELINE",
+                    provenance=prov_cap
                 ))
 
         # RULE 7: Truncated Chart Minimum Completeness Check
+        # Type: DOCUMENTATION_STANDARD
         if evidence.is_truncated_or_incomplete:
             results.append(DeterministicRuleCheck(
                 rule_id="RULE-DET-06",
@@ -168,7 +259,8 @@ class DeterministicRuleValidator:
                 status="INSUFFICIENT_DATA",
                 severity="Critical",
                 penalty_score=0,
-                reproducible_rule_logic="ASSERT len(record_text) >= 120 AND has_clinical_sections == TRUE"
+                reproducible_rule_logic="ASSERT len(record_text) >= 120 AND has_clinical_sections == TRUE",
+                rule_type="DOCUMENTATION_STANDARD"
             ))
 
         return results

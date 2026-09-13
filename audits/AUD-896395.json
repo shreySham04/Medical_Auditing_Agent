@@ -1,0 +1,31 @@
+{
+  "id": "AUD-896395",
+  "case_id": "AUD-896395",
+  "patientName": "Unknown / Not documented",
+  "doctorName": "Unknown / Not documented",
+  "hospitalName": "Unknown / Not documented",
+  "department": "Inpatient Unit",
+  "complianceScore": 0,
+  "primaryScore": 0,
+  "clinicalScore": 0,
+  "billingScore": 0,
+  "documentationScore": 0,
+  "timelineScore": 0,
+  "verdict": "INSUFFICIENT_EVIDENCE",
+  "riskClassification": "CRITICAL_DEFICIENCY",
+  "abstention_reason": "Clinical chart is severely truncated or lacks prerequisite clinical documentation.",
+  "findings": [
+    {
+      "id": "FIND-INSUFF-01",
+      "type": "Documentation Quality",
+      "severity": "Critical",
+      "description": "Chart is incomplete or truncated. Abstaining from scoring per clinical safety protocol.",
+      "official_document": "CMS Condition of Participation (42 CFR \u00a7 482.24)",
+      "citation_code": "CMS-DOC-REQ"
+    }
+  ],
+  "explainedTerms": [],
+  "reportMarkdown": "# Forensic Audit Abstention: AUD-896395\n\n**Verdict:** INSUFFICIENT_EVIDENCE\n\nRecord contains fewer than required clinical elements.",
+  "latency_ms": 0.1,
+  "timestamp": "2026-09-13T13:24:56Z"
+}

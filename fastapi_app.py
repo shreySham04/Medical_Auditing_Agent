@@ -501,8 +501,8 @@ try:
         updated_audit = {
             "id": audit_id_final,
             "patientName": pipeline_res.get("patientName", patient_name),
-            "doctorName": pipeline_res.get("doctorName", existing_audit.get("doctorName") if existing_audit else "Dr. Elena Vance"),
-            "hospitalName": pipeline_res.get("hospitalName", existing_audit.get("hospitalName") if existing_audit else "St. Jude General Hospital"),
+            "doctorName": pipeline_res.get("doctorName", existing_audit.get("doctorName") if existing_audit else "Unknown / Not documented"),
+            "hospitalName": pipeline_res.get("hospitalName", existing_audit.get("hospitalName") if existing_audit else "Unknown / Not documented"),
             "department": pipeline_res.get("department", existing_audit.get("department") if existing_audit else "Emergency Medicine"),
             "complianceScore": pipeline_res["complianceScore"],
             "primaryScore": pipeline_res["complianceScore"],
@@ -640,8 +640,8 @@ class ForensicRESTHandler(http.server.BaseHTTPRequestHandler):
                 "complaints": [
                     {
                         "id": "CMP-801",
-                        "patient": "Eleanor Vance",
-                        "facility": "St. Jude Surgical Center",
+                        "patient": "De-identified Patient A",
+                        "facility": "Facility A",
                         "category": "Surgical Negligence",
                         "status": "Under Multi-Agent Audit",
                         "submitted_at": "2026-08-01",
@@ -649,8 +649,8 @@ class ForensicRESTHandler(http.server.BaseHTTPRequestHandler):
                     },
                     {
                         "id": "CMP-802",
-                        "patient": "Marcus Thorne",
-                        "facility": "Metro Heart Hospital",
+                        "patient": "De-identified Patient B",
+                        "facility": "Facility B",
                         "category": "CPT Upcoding & Billing Fraud",
                         "status": "Pending Review",
                         "submitted_at": "2026-08-02",
@@ -659,6 +659,25 @@ class ForensicRESTHandler(http.server.BaseHTTPRequestHandler):
                 ]
             }
             self.wfile.write(json.dumps(res).encode('utf-8'))
+
+        elif path in ["/api/benchmark/metrics", "/api/fastapi/benchmark/metrics"]:
+            self._set_headers(200)
+            from evaluation.evaluator import BenchmarkEvaluator
+            metrics = BenchmarkEvaluator.evaluate_all().to_dict()
+            self.wfile.write(json.dumps(metrics).encode('utf-8'))
+
+        elif path in ["/api/experiments/ablation", "/api/fastapi/experiments/ablation"]:
+            self._set_headers(200)
+            from evaluation.experiments import ExperimentBenchmarkRunner
+            ablations = [r.to_dict() for r in ExperimentBenchmarkRunner.run_full_ablation_experiment()]
+            self.wfile.write(json.dumps({"count": len(ablations), "results": ablations}).encode('utf-8'))
+
+        elif path in ["/api/experiments/runs", "/api/fastapi/experiments/runs"]:
+            self._set_headers(200)
+            from core.experiment_tracker import ExperimentTracker
+            ExperimentTracker.seed_initial_ablation_runs()
+            runs = ExperimentTracker.get_all_runs()
+            self.wfile.write(json.dumps({"count": len(runs), "runs": runs}).encode('utf-8'))
 
         else:
             self._set_headers(404)
@@ -702,8 +721,8 @@ class ForensicRESTHandler(http.server.BaseHTTPRequestHandler):
                 "id": audit_id_final,
                 "case_id": audit_id_final,
                 "patient_name": pipeline_res.get("patientName", patient_name),
-                "doctor_name": pipeline_res.get("doctorName", existing_audit.get("doctorName") if existing_audit else "Dr. Elena Vance"),
-                "hospital": pipeline_res.get("hospitalName", existing_audit.get("hospitalName") if existing_audit else "St. Jude General Hospital"),
+                "doctor_name": pipeline_res.get("doctorName", existing_audit.get("doctorName") if existing_audit else "Unknown / Not documented"),
+                "hospital": pipeline_res.get("hospitalName", existing_audit.get("hospitalName") if existing_audit else "Unknown / Not documented"),
                 "compliance_rating": pipeline_res["complianceScore"],
                 "verdict": pipeline_res["verdict"],
                 "risk_classification": pipeline_res["riskClassification"],

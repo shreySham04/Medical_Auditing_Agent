@@ -18,6 +18,25 @@ import json
 
 
 @dataclass
+class RegulatorySourceProvenance:
+    source_organization: str  # e.g., "Centers for Medicare & Medicaid Services (CMS)"
+    document_title: str       # e.g., "Medicare Claims Processing Manual Chapter 12"
+    version_or_edition: str   # e.g., "2024-2026 Manual Rev. 12345"
+    publication_date: str     # e.g., "2024-01-01"
+    effective_date: str       # e.g., "2024-01-01"
+    section: str              # e.g., "Section 30.6.12 (Critical Care Services)"
+    canonical_identifier: str # e.g., "CMS-IOM-100-04-12-30.6.12"
+    jurisdiction: str         # e.g., "US Federal / Medicare Part B"
+    last_verified_date: str   # e.g., "2026-01-15"
+    rule_reviewer: str        # e.g., "Clinical & Regulatory Review Board"
+    rule_type: Literal["STATUTORY_CODING_RULE", "CLINICAL_PRACTICE_GUIDELINE", "DOCUMENTATION_STANDARD", "MEDICAL_NECESSITY"] = "STATUTORY_CODING_RULE"
+    clinical_exceptions: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
 class CitationInfo:
     document_title: str
     section_code: str
@@ -25,6 +44,7 @@ class CitationInfo:
     issuing_authority: str = "CMS / AMA / AHA"
     source_url: str = ""
     year: int = 2026
+    provenance: Optional[RegulatorySourceProvenance] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -37,6 +57,19 @@ class EvidenceSpan:
     start_char: int = -1
     end_char: int = -1
     confidence: float = 1.0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class ClinicalAssertion:
+    concept: str  # e.g. "blood_cultures", "chest_radiography", "physician_critical_time"
+    assertion_status: Literal["PERFORMED", "ORDERED_NOT_PERFORMED", "CONTRAINDICATED", "NOT_DOCUMENTED", "REFUSED_BY_PATIENT", "EXCEPTION_IDENTIFIED"]
+    event_timestamp_min: Optional[int] = None
+    certainty: Literal["DOCUMENTED", "NEGATED", "HYPOTHETICAL", "HISTORICAL"] = "DOCUMENTED"
+    evidence_span: Optional[EvidenceSpan] = None
+    exception_notes: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -59,6 +92,8 @@ class StructuredClinicalEvidence:
     procedures_identified: List[str] = field(default_factory=list)
     medications_ordered: List[str] = field(default_factory=list)
     cpt_codes_identified: List[str] = field(default_factory=list)
+    clinical_assertions: List[ClinicalAssertion] = field(default_factory=list)
+    documented_exceptions: List[str] = field(default_factory=list)
     physician_time_minutes: Optional[int] = None
     has_attending_signature: bool = False
     has_informed_consent: bool = False
@@ -78,10 +113,14 @@ class DeterministicRuleCheck:
     citation_code: str
     expected_constraint: str
     observed_fact: str
-    status: Literal["PASSED", "VIOLATED", "NOT_APPLICABLE", "INSUFFICIENT_DATA"]
+    status: Literal["PASSED", "VIOLATED", "NOT_APPLICABLE", "INSUFFICIENT_DATA", "CLINICAL_EXCEPTION_APPLIED"]
     severity: Literal["Low", "Medium", "High", "Critical"]
     penalty_score: int
     reproducible_rule_logic: str
+    rule_type: Literal["STATUTORY_CODING_RULE", "CLINICAL_PRACTICE_GUIDELINE", "DOCUMENTATION_STANDARD", "MEDICAL_NECESSITY"] = "STATUTORY_CODING_RULE"
+    evidence_span: Optional[EvidenceSpan] = None
+    provenance: Optional[RegulatorySourceProvenance] = None
+    clinical_exception_noted: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -222,6 +261,46 @@ class TimelineAgentOutput:
 
 
 @dataclass
+class BenchmarkCaseInput:
+    id: str
+    specialty: str
+    topic_code: str
+    title: str
+    record_text: str
+    cpt_billed: str
+    patient_name: str = "Unknown / De-identified"
+    doctor_name: str = "Unknown / De-identified"
+    hospital_name: str = "Unknown / De-identified"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class BenchmarkCaseGroundTruth:
+    has_violation: bool
+    violation_category: Literal["NONE", "BILLING_UPCODING", "CLINICAL_SAFETY", "DOCUMENTATION_INSUFFICIENCY", "ADVERSARIAL_ATTACK", "CONFLICTING_RECORD"]
+    expected_verdict: Literal["Pass", "Flagged", "Failed", "INSUFFICIENT_EVIDENCE", "CONFLICTING_EVIDENCE"]
+    expected_severity: Literal["Low", "Medium", "High", "Critical"]
+    clinical_violation: bool
+    billing_violation: bool
+    violation_description: str
+    evidence_citation: str
+    human_explanation: str
+    cpt_justified: str = ""
+    expected_score: int = 90
+    expected_score_min: int = 80
+    expected_score_max: int = 100
+    applicable_rule_id: str = ""
+    evidence_quote: str = ""
+    is_adversarial_injection: bool = False
+    is_truncated_incomplete: bool = False
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
 class BenchmarkCase:
     id: str
     specialty: str
@@ -234,7 +313,7 @@ class BenchmarkCase:
     cpt_billed: str
     cpt_justified: str
     expected_score: int
-    expected_verdict: Literal["Pass", "Flagged", "Failed", "INSUFFICIENT_EVIDENCE"]
+    expected_verdict: Literal["Pass", "Flagged", "Failed", "INSUFFICIENT_EVIDENCE", "CONFLICTING_EVIDENCE"]
     expected_severity: Literal["Low", "Medium", "High", "Critical"]
     clinical_violation: bool
     billing_violation: bool
@@ -243,6 +322,50 @@ class BenchmarkCase:
     human_explanation: str
     is_adversarial_injection: bool = False
     is_truncated_incomplete: bool = False
+    split: Literal["DEV", "LOCKED_TEST", "ADVERSARIAL_TEST"] = "LOCKED_TEST"
+
+    @property
+    def input(self) -> BenchmarkCaseInput:
+        return BenchmarkCaseInput(
+            id=self.id,
+            specialty=self.specialty,
+            topic_code=self.topic_code,
+            title=self.title,
+            record_text=self.record_text,
+            cpt_billed=self.cpt_billed,
+            patient_name=self.patient_name,
+            doctor_name=self.doctor_name,
+            hospital_name=self.hospital_name
+        )
+
+    @property
+    def ground_truth(self) -> BenchmarkCaseGroundTruth:
+        cat = "NONE"
+        if self.is_adversarial_injection:
+            cat = "ADVERSARIAL_ATTACK"
+        elif self.is_truncated_incomplete or self.expected_verdict == "INSUFFICIENT_EVIDENCE":
+            cat = "DOCUMENTATION_INSUFFICIENCY"
+        elif self.billing_violation:
+            cat = "BILLING_UPCODING"
+        elif self.clinical_violation:
+            cat = "CLINICAL_SAFETY"
+
+        has_v = bool(self.clinical_violation or self.billing_violation or self.expected_verdict in ["Flagged", "Failed", "INSUFFICIENT_EVIDENCE"])
+        return BenchmarkCaseGroundTruth(
+            has_violation=has_v,
+            violation_category=cat,
+            expected_verdict=self.expected_verdict,
+            expected_severity=self.expected_severity,
+            clinical_violation=self.clinical_violation,
+            billing_violation=self.billing_violation,
+            violation_description=self.violation_description,
+            evidence_citation=self.evidence_citation,
+            human_explanation=self.human_explanation,
+            cpt_justified=self.cpt_justified,
+            expected_score=self.expected_score,
+            is_adversarial_injection=self.is_adversarial_injection,
+            is_truncated_incomplete=self.is_truncated_incomplete
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -264,8 +387,11 @@ class EvaluationMetrics:
     expected_calibration_error: float
     brier_score: float
     score_mae: float
+    abstention_rate: float = 0.0
+    citation_support_rate: float = 95.0
     insufficient_evidence_detection_rate: float = 100.0
     prompt_injection_defense_rate: float = 100.0
+    benchmark_injection_detection_rate: float = 100.0
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
