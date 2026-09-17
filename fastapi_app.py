@@ -669,7 +669,7 @@ class ForensicRESTHandler(http.server.BaseHTTPRequestHandler):
         elif path in ["/api/experiments/ablation", "/api/fastapi/experiments/ablation"]:
             self._set_headers(200)
             from evaluation.experiments import ExperimentBenchmarkRunner
-            ablations = [r.to_dict() for r in ExperimentBenchmarkRunner.run_full_ablation_experiment()]
+            ablations = [r.to_dict() for r in ExperimentBenchmarkRunner.run_full_ablation_experiment(require_api_key=True)]
             self.wfile.write(json.dumps({"count": len(ablations), "results": ablations}).encode('utf-8'))
 
         elif path in ["/api/experiments/runs", "/api/fastapi/experiments/runs"]:

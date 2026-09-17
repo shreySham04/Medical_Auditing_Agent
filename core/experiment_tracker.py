@@ -98,7 +98,7 @@ class ExperimentTracker:
             return
 
         from evaluation.experiments import ExperimentBenchmarkRunner
-        results = ExperimentBenchmarkRunner.run_full_ablation_experiment()
+        results = ExperimentBenchmarkRunner.run_full_ablation_experiment(require_api_key=True)
 
         prompt_vers = {
             "baseline_llm": "prompt-zero-shot-v1.0",

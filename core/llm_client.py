@@ -31,11 +31,13 @@ class ModelBackedLLMClient:
     @classmethod
     def _get_api_key(cls, require_key: bool = True) -> str:
         key = os.getenv("GEMINI_API_KEY", "").strip()
-        if require_key and (not key or key == "MY_GEMINI_API_KEY"):
-            raise RuntimeError(
-                "GEMINI_API_KEY is required for model-backed evaluation. "
-                "Set GEMINI_API_KEY in your environment to execute real model-backed ablation."
-            )
+        if not key or key == "MY_GEMINI_API_KEY":
+            if require_key:
+                raise RuntimeError(
+                    "GEMINI_API_KEY is strictly mandatory for model-backed evaluation and audit pipelines. "
+                    "Simulation fallback is strictly prohibited. Please set GEMINI_API_KEY in your environment."
+                )
+            return ""
         return key
 
     @classmethod
@@ -93,12 +95,10 @@ class ModelBackedLLMClient:
 
         api_key = cls._get_api_key(require_key=require_api_key)
         if not api_key:
-            return {
-                "has_violation": False,
-                "compliance_score": 85,
-                "findings": [],
-                "reasoning": "No API key provided."
-            }
+            raise RuntimeError(
+                "GEMINI_API_KEY is strictly mandatory for all model evaluation calls. "
+                "Simulation fallback is strictly prohibited."
+            )
 
         last_err: Optional[Exception] = None
         for m_name in candidate_models:

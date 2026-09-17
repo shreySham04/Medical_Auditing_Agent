@@ -23,8 +23,8 @@ class BenchmarkService:
 
     @classmethod
     def run_ablation_experiments(cls) -> List[Dict[str, Any]]:
-        """Executes empirical comparisons across all 4 architectures."""
-        results = ExperimentBenchmarkRunner.run_full_ablation_experiment()
+        """Executes empirical comparisons across all 5 architectures with mandatory API key verification."""
+        results = ExperimentBenchmarkRunner.run_full_ablation_experiment(require_api_key=True)
         return [r.to_dict() for r in results]
 
     @classmethod

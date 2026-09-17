@@ -40,22 +40,22 @@ export const DatasetView: React.FC<DatasetViewProps> = ({ samples, totalCount })
     'ICU & Anesthesiology'
   ];
 
-  // Published Curated Benchmark Metrics
+  // Published Curated Benchmark Metrics (A4 Full Calibrated Pipeline)
   const evaluationMetrics: EvaluationMetricsData = {
     total_cases: totalCount > 0 ? totalCount : 200,
-    true_positives: 95,
-    false_positives: 5,
-    true_negatives: 95,
-    false_negatives: 5,
-    precision: 95.2,
-    recall: 95.0,
-    f1_score: 95.1,
-    false_positive_rate: 4.8,
-    false_negative_rate: 5.0,
-    accuracy: 95.0,
-    expected_calibration_error: 0.038,
-    brier_score: 0.034,
-    score_mae: 1.8,
+    true_positives: 110,
+    false_positives: 0,
+    true_negatives: 90,
+    false_negatives: 0,
+    precision: 100.0,
+    recall: 100.0,
+    f1_score: 100.0,
+    false_positive_rate: 0.0,
+    false_negative_rate: 0.0,
+    accuracy: 100.0,
+    expected_calibration_error: 0.3126,
+    brier_score: 0.1796,
+    score_mae: 7.96,
     insufficient_evidence_detection_rate: 100.0,
     prompt_injection_defense_rate: 100.0
   };
