@@ -15,14 +15,14 @@ class TestServicesAndExperiments(unittest.TestCase):
 
     def test_audit_service_compliant_case(self):
         text = "Patient evaluated for routine outpatient consult. BP 120/80, HR 72, SpO2 98%. Informed consent obtained. Attending Dr. Smith MD, electronically signed."
-        res = AuditService.execute_audit(text)
+        res = AuditService.execute_audit(text, save_to_disk=False)
         self.assertIn("complianceScore", res)
         self.assertIn(res["verdict"], ["Pass", "Flagged"])
         self.assertGreaterEqual(res["complianceScore"], 70)
 
     def test_audit_service_truncated_abstention(self):
         text = "Follow up note."
-        res = AuditService.execute_audit(text)
+        res = AuditService.execute_audit(text, save_to_disk=False)
         self.assertEqual(res["verdict"], "INSUFFICIENT_EVIDENCE")
         self.assertEqual(res["complianceScore"], 0)
 

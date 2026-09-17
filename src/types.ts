@@ -227,3 +227,21 @@ export interface PipelineStage {
   status: PipelineStageStatus;
   statusLabel: string;
 }
+
+export interface ReportTab {
+  id: string;
+  title: string;
+  audit: AuditRecord | null;
+  fileName: string;
+  rawRecordText: string;
+  fileBase64: string;
+  fileType: string;
+  patientName: string;
+  clinicianParams: ClinicianParams;
+  score: number;
+  verdict: string;
+  pipelineStages: PipelineStage[];
+  inspectorTab: 'report' | 'evidence' | 'deterministic' | 'verification' | 'trace' | 'translator';
+  isDraft: boolean;
+  createdAt: number;
+}

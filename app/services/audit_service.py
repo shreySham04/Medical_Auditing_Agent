@@ -31,7 +31,8 @@ class AuditService:
         hospital_name: str = "Unknown / Not documented",
         specialization: str = "General Medicine",
         department: str = "Inpatient Unit",
-        audit_id: Optional[str] = None
+        audit_id: Optional[str] = None,
+        save_to_disk: bool = True
     ) -> Dict[str, Any]:
         """
         Runs the full 4-stage pipeline:
@@ -83,7 +84,8 @@ class AuditService:
                 "latency_ms": round((time.perf_counter() - t_start) * 1000, 1),
                 "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             }
-            cls.save_audit(result)
+            if save_to_disk:
+                cls.save_audit(result)
             return result
 
         # 3. Deterministic Statutory Rules
@@ -194,7 +196,8 @@ class AuditService:
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         }
 
-        cls.save_audit(res)
+        if save_to_disk:
+            cls.save_audit(res)
         return res
 
     @classmethod
