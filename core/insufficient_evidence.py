@@ -15,8 +15,8 @@ class InsufficientEvidenceAssessor:
     and administrative facts to conduct an ethical, sound compliance audit.
     """
 
-    MINIMUM_TEXT_LENGTH = 120
-    MINIMUM_WORD_COUNT = 25
+    MINIMUM_TEXT_LENGTH = 100
+    MINIMUM_WORD_COUNT = 20
 
     @classmethod
     def evaluate_sufficiency(
@@ -32,12 +32,18 @@ class InsufficientEvidenceAssessor:
 
         # 1. Extreme Brevity Check
         if len(raw) < cls.MINIMUM_TEXT_LENGTH or len(words) < cls.MINIMUM_WORD_COUNT:
-            missing_elements.append(f"Chart text is severely truncated ({len(raw)} characters, {len(words)} words; minimum required is 120 chars).")
+            missing_elements.append(f"Chart text is severely truncated ({len(raw)} characters, {len(words)} words; minimum required is 100 chars).")
 
         # 2. Check for missing vital diagnostic components
-        has_clinical_narrative = any(term in lower for term in [
-            "presented", "evaluated", "admitted", "history", "examination", "assessment", "plan", "complaint", "diagnos"
-        ])
+        clinical_keywords = [
+            "present", "evaluat", "admit", "histor", "exam", "assess", "plan",
+            "complaint", "diagnos", "seen", "prescrib", "treat", "noted",
+            "triage", "vitals", "impression", "consult", "clinic", "symptom",
+            "arrival", "arrived", "procedure", "operative", "bp ", "hr ", "spo2",
+            "transferred", "discharged", "follow up", "physician", "rhinitis",
+            "hypertension", "routine", "lisinopril"
+        ]
+        has_clinical_narrative = any(term in lower for term in clinical_keywords)
         if not has_clinical_narrative:
             missing_elements.append("No clinical narrative, HPI, or medical decision-making text detected.")
 

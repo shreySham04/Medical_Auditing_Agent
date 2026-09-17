@@ -94,7 +94,7 @@ class ExperimentTracker:
     def seed_initial_ablation_runs(cls) -> None:
         """Seeds canonical tracked runs from the real benchmark ablation trials if empty."""
         runs = cls.get_all_runs()
-        if len(runs) >= 4:
+        if len(runs) >= 5:
             return
 
         from evaluation.experiments import ExperimentBenchmarkRunner
@@ -104,14 +104,16 @@ class ExperimentTracker:
             "baseline_llm": "prompt-zero-shot-v1.0",
             "single_agent_rules": "prompt-single-rule-v2.0",
             "multi_agent_rules": "prompt-multi-agent-v2.3",
-            "full_pipeline": "prompt-full-pipeline-verifier-v2.5"
+            "multi_agent_verifier": "prompt-multi-agent-verifier-v2.4",
+            "full_pipeline": "prompt-full-pipeline-calibrated-v2.5"
         }
 
         models = {
             "baseline_llm": "gemini-2.5-flash-zero-shot",
             "single_agent_rules": "hybrid-deterministic-v2.0",
             "multi_agent_rules": "multi-agent-gemini-2.5-flash",
-            "full_pipeline": "mauditor-7agent-verifier-ensemble"
+            "multi_agent_verifier": "mauditor-6agent-verifier",
+            "full_pipeline": "mauditor-7agent-calibrated-ensemble"
         }
 
         now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())

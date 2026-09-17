@@ -93,7 +93,7 @@ class DeterministicRuleValidator:
             any(m in ["Ceftriaxone", "Vancomycin", "Cefepime", "Zosyn", "Piperacillin", "Azithromycin"] for m in evidence.medications_ordered)
             or any(abx in lower for abx in ["ceftriaxone", "vancomycin", "cefepime", "zosyn", "piperacillin", "azithromycin", "antibiotic", "antibiotics"])
         )
-        if "sepsis" in lower or "septic" in lower or "bacteremia" in lower or ("shock" in lower and has_abx):
+        if "sepsis" in lower or "septic" in lower or "bacteremia" in lower or ("shock" in lower and has_abx) or "cultures were not drawn" in lower or "cultures omitted" in lower:
             bc_assertion = assertions.get("blood_cultures")
             has_bcx_drawn = procedural.get("has_blood_cultures_drawn", False)
             
@@ -149,11 +149,26 @@ class DeterministicRuleValidator:
                     rule_type="STATUTORY_CODING_RULE",
                     provenance=prov_ncci
                 ))
+            elif any(t in lower for t in ["contralateral", "distinct", "separate incision", "separate site", "separate surgical drape"]):
+                results.append(DeterministicRuleCheck(
+                    rule_id="RULE-DET-03",
+                    rule_name="Improper Modifier -59 Procedural Unbundling",
+                    authority="CMS NCCI Policy Manual Ch. 1 §E & AMA CPT Guidelines Modifier 59",
+                    citation_code="CMS-NCCI-CH1-MOD59",
+                    expected_constraint="Modifier -59 requires distinct procedural encounter, separate incision, or distinct anatomical site.",
+                    observed_fact="Documented distinct contralateral anatomical site / separate surgical field validates Modifier -59 usage under CMS NCCI rules.",
+                    status="CLINICAL_EXCEPTION_APPLIED",
+                    severity="None",
+                    penalty_score=0,
+                    reproducible_rule_logic="ASSERT anatomical_site_A != anatomical_site_B WHEN modifier == '-59'",
+                    rule_type="STATUTORY_CODING_RULE",
+                    provenance=prov_ncci
+                ))
 
         # RULE 4: ACS 10-Minute ECG Acquisition Protocol
         # Type: CLINICAL_PRACTICE_GUIDELINE
         prov_ncd = cls._get_provenance("DOC-CMS-NCD-20.4")
-        if "stemi" in lower or "chest pain" in lower or "cardiac arrest" in lower or "troponin" in labs:
+        if "stemi" in lower or "chest pain" in lower or "cardiac arrest" in lower or "troponin" in labs or "retrosternal" in lower or "st elevation" in lower or "cath lab" in lower or timing.get("door_to_ecg_minutes") is not None:
             door_to_ecg = timing.get("door_to_ecg_minutes")
             if door_to_ecg is not None:
                 if door_to_ecg > 10:
@@ -217,7 +232,7 @@ class DeterministicRuleValidator:
         # RULE 6: Diagnostic Radiographic Confirmation for Inpatient Pneumonia
         # Type: CLINICAL_PRACTICE_GUIDELINE
         prov_cap = cls._get_provenance("DOC-ATS-IDSA-PNEUMONIA")
-        if "pneumonia" in lower and ("admitted" in lower or "inpatient" in lower):
+        if ("pneumonia" in lower or "pulmonary infiltrate" in lower) and ("admitted" in lower or "inpatient" in lower or "hospitalization" in lower):
             cxr_assertion = assertions.get("chest_radiograph")
             has_imaging = procedural.get("has_radiograph_confirmed", False)
             if cxr_assertion and cxr_assertion.assertion_status == "EXCEPTION_IDENTIFIED":
@@ -252,6 +267,25 @@ class DeterministicRuleValidator:
                     provenance=prov_cap
                 ))
 
+        # RULE 8: CPT 99285 (Level 5 Emergency Department Visit) Upcoding Detection
+        # Type: STATUTORY_CODING_RULE
+        prov_ed = cls._get_provenance("DOC-AMA-CPT-ED-MDM")
+        if ("99285" in raw or "level 5" in lower) and ("low complexity" in lower or "superficial" in lower or "minor" in lower or "straightforward" in lower):
+            results.append(DeterministicRuleCheck(
+                rule_id="RULE-DET-08",
+                rule_name="Inappropriate CPT 99285 Level 5 ED Billing (Upcoding)",
+                authority="AMA CPT 2026 E/M Guidelines §99285 & §99282",
+                citation_code="AMA-CPT-2026-ED-99285",
+                expected_constraint="CPT 99285 requires high-complexity Medical Decision Making with immediate threat to life/limb.",
+                observed_fact="Facility billed CPT 99285 (Level 5) for superficial/low-complexity presentation without organ threat.",
+                status="VIOLATED",
+                severity="High",
+                penalty_score=35,
+                reproducible_rule_logic="ASSERT mdm_level == High WHEN cpt == 99285",
+                rule_type="STATUTORY_CODING_RULE",
+                provenance=prov_ed
+            ))
+
         # RULE 7: Truncated Chart Minimum Completeness Check
         # Type: DOCUMENTATION_STANDARD
         if evidence.is_truncated_or_incomplete:
@@ -265,7 +299,7 @@ class DeterministicRuleValidator:
                 status="INSUFFICIENT_DATA",
                 severity="Critical",
                 penalty_score=0,
-                reproducible_rule_logic="ASSERT len(record_text) >= 120 AND has_clinical_sections == TRUE",
+                reproducible_rule_logic="ASSERT len(record_text) >= 100 AND has_clinical_sections == TRUE",
                 rule_type="DOCUMENTATION_STANDARD"
             ))
 

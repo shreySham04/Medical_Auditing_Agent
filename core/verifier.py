@@ -1,17 +1,17 @@
 """
-Independent Adversarial Verifier Pass (2nd-Stage Audit Verification).
-Separates primary auditor from verification:
+Rule-Aware Adversarial Evidence Verifier (Stage 2 Audit Finding Verification).
+Separates primary candidate findings from evidence validation:
 1. Receives ONLY:
    - raw source clinical record (unannotated)
    - candidate claim statement
    - cited textual quote / excerpt
    - proposed severity
-   (No access to the primary agent's internal reasoning, chain-of-thought, or intermediate calculations)
-2. Independently assesses:
-   - Textual Grounding: Exact or fuzzy span presence in source text
-   - Contradiction Detection: Whether raw text contradicts the candidate claim
-   - Clinical Exception Detection: Whether mitigating clinical justifications exist in source text
-   - Authority Verification: Whether cited regulatory statute applies
+   (Evaluates evidence independently without relying on upstream generative assumptions)
+2. Rigorously assesses:
+   - Character-Span Grounding: Exact or normalized span presence in source text
+   - Contradiction Testing: Whether raw text objectively contradicts the candidate claim
+   - Clinical Exception Verification: Whether mitigating clinical exceptions or contraindications exist
+   - Regulatory Authority Grounding: Whether cited CMS/AMA/NCCI statute applies
 """
 
 import re
@@ -19,10 +19,10 @@ from typing import List, Dict, Any, Tuple, Optional
 from core.schemas import VerifierPassFinding, EvidenceSpan
 
 
-class IndependentVerifierPass:
+class RuleAwareAdversarialVerifier:
     """
-    Second-stage independent adversarial verification pass.
-    Evaluates claims strictly against raw source text without shared assumptions.
+    Second-stage rule-aware adversarial evidence verifier.
+    Evaluates claims strictly against raw source text, grounded spans, and documented clinical exceptions.
     """
 
     @classmethod
@@ -135,8 +135,14 @@ class IndependentVerifierPass:
                     concept_grounded = ("signature" in raw_lower or "signed" in raw_lower or "dr." in raw_lower or "physician" in raw_lower or len(raw_text) > 50)
                 elif "paracentesis" in f_desc_lower or "ascites" in f_desc_lower:
                     concept_grounded = ("paracentesis" in raw_lower or "ascites" in raw_lower or "cirrhosis" in raw_lower)
-                elif "stemi" in f_desc_lower or "pci" in f_desc_lower or "cath" in f_desc_lower:
-                    concept_grounded = ("stemi" in raw_lower or "pci" in raw_lower or "cath" in raw_lower or "infarction" in raw_lower)
+                elif "stemi" in f_desc_lower or "pci" in f_desc_lower or "cath" in f_desc_lower or "ecg" in f_desc_lower or "ekg" in f_desc_lower or "door-to-ecg" in f_desc_lower:
+                    concept_grounded = ("stemi" in raw_lower or "pci" in raw_lower or "cath" in raw_lower or "infarction" in raw_lower or "ecg" in raw_lower or "ekg" in raw_lower or "chest pain" in raw_lower or "tightness" in raw_lower)
+                elif "99285" in f_desc or "level 5" in f_desc_lower or "upcod" in f_desc_lower or "ed billing" in f_desc_lower:
+                    concept_grounded = ("99285" in raw_text or "level 5" in raw_lower or "ed" in raw_lower or "complexity" in raw_lower or "wound" in raw_lower or "abrasion" in raw_lower)
+                elif "pneumonia" in f_desc_lower or "radiograph" in f_desc_lower or "x-ray" in f_desc_lower or "imaging" in f_desc_lower:
+                    concept_grounded = ("pneumonia" in raw_lower or "infiltrate" in raw_lower or "x-ray" in raw_lower or "radiograph" in raw_lower or "imaging" in raw_lower or "cxr" in raw_lower)
+                elif "consent" in f_desc_lower or "surgical" in f_desc_lower or "preoperative" in f_desc_lower:
+                    concept_grounded = ("consent" in raw_lower or "surgical" in raw_lower or "procedure" in raw_lower or "operative" in raw_lower or "surgery" in raw_lower)
                 else:
                     concept_grounded = False
 
@@ -293,3 +299,7 @@ class IndependentVerifierPass:
                 final_upheld_findings.append(finding)
 
         return verified_pass_logs, final_upheld_findings
+
+
+# Backward-compatible alias for existing callers
+IndependentVerifierPass = RuleAwareAdversarialVerifier

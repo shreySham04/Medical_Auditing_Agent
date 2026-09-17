@@ -43,10 +43,10 @@ class StructuredEvidenceExtractor:
 
         # 1. Minimum Viable Chart Check
         words = raw.split()
-        if len(raw.strip()) < 120 or len(words) < 20:
+        if len(raw.strip()) < 100 or len(words) < 20:
             evidence.is_truncated_or_incomplete = True
             evidence.missing_prerequisites.append(
-                "Minimum viable clinical chart length not met (<120 characters / <20 tokens)."
+                "Minimum viable clinical chart length not met (<100 characters / <20 tokens)."
             )
 
         # 2. Patient Demographics & Facility
@@ -116,6 +116,11 @@ class StructuredEvidenceExtractor:
             r'(\d{1,3})\s*(?:minutes|mins|min)\s*(?:bedside|face-to-face|direct|total|critical|evaluation|care)',
             raw, re.IGNORECASE
         )
+        if not time_match:
+            time_match = re.search(
+                r'(?:bedside|face-to-face|direct physician|physician|evaluation|management|care|cpt 99291)[^.\n;]*?(?:lasted|totaling|totaled|duration of|time:?|time was|for)\s*(\d{1,3})\s*(?:minutes|mins|min)',
+                raw, re.IGNORECASE
+            )
         if time_match:
             try:
                 evidence.physician_time_minutes = int(time_match.group(1))
@@ -125,6 +130,29 @@ class StructuredEvidenceExtractor:
                 ).to_dict())
             except ValueError:
                 pass
+
+        # 4b. Door-to-ECG Acquisition Timing
+        timing_dict: Dict[str, Any] = {}
+        ecg_time_match = re.search(
+            r'(?:ecg|ekg)[^.\n;]*?(?:acquired|obtained|completed|performed|within|delayed)[^.\n;]*?(\d{1,3})\s*(?:minutes|mins|min)',
+            raw, re.IGNORECASE
+        )
+        if not ecg_time_match:
+            ecg_time_match = re.search(
+                r'(\d{1,3})\s*(?:minutes|mins|min)[^.\n;]*?(?:after|post-arrival|post arrival)[^.\n;]*?(?:showing|demonstrating)?.*?(?:ecg|ekg|stemi)',
+                raw, re.IGNORECASE
+            )
+        if ecg_time_match:
+            try:
+                door_to_ecg_mins = int(ecg_time_match.group(1))
+                timing_dict["door_to_ecg_minutes"] = door_to_ecg_mins
+                evidence.extracted_spans.append(EvidenceSpan(
+                    source_field="timing.door_to_ecg", exact_quote=ecg_time_match.group(0),
+                    start_char=ecg_time_match.start(), end_char=ecg_time_match.end()
+                ).to_dict())
+            except ValueError:
+                pass
+        evidence.timing_milestones = timing_dict
 
         # 5. Concept Assertions with Status, Temporality, Normalized Events, and Exceptions
         assertions: List[ClinicalAssertion] = []
@@ -141,7 +169,12 @@ class StructuredEvidenceExtractor:
             "bcx pnd order not cllctd", "awaiting blood draw", "pending blood cultures",
             "blood cultures pending", "order placed for bcx, pending"
         ])
-        bc_negation = bc_pending or any(phrase in lower for phrase in [
+        bc_post_antibiotic = any(p in lower for p in [
+            "after antibiotic", "post-antimicrobial", "post antimicrobial",
+            "after antimicrobials", "after antibiotics", "following antibiotic",
+            "cultures were sent post", "cultures sent post"
+        ])
+        bc_negation = bc_pending or bc_post_antibiotic or any(phrase in lower for phrase in [
             "cultures were not drawn", "without prior blood culture", "blood cultures omitted",
             "no blood culture", "no blood cultures", "omitted pre-antibiotic", "no bcx",
             "blood cultures not obtained", "cultures not sent", "abx given without cultures",
@@ -154,7 +187,7 @@ class StructuredEvidenceExtractor:
             "emergent risk prioritization", "unable to obtain peripheral access, empiric abx started",
             "stat antibiotics due to severe septic crash", "critical access failure"
         ])
-        bc_performed = not bc_negation and not bc_pending and (
+        bc_performed = not bc_negation and not bc_pending and not bc_post_antibiotic and (
             any(p in lower for p in [
                 "blood cultures drawn", "blood culture drawn", "cultures drawn",
                 "blood cultures collected", "blood culture collected", "bcx obtained",
@@ -439,6 +472,9 @@ class StructuredEvidenceExtractor:
                     source_span=time_span,
                     clinical_note=f"Documented direct time ({time_mins}m) below 30m minimum threshold."
                 ))
+
+        if ("-59" in raw or "modifier 59" in lower) and any(t in lower for t in ["contralateral", "distinct", "separate incision", "separate site"]):
+            exceptions.append("Documented distinct contralateral anatomical site validates Modifier -59 under CMS NCCI rules.")
 
         evidence.clinical_assertions = assertions
         evidence.normalized_events = normalized_events

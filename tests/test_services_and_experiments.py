@@ -37,10 +37,10 @@ class TestServicesAndExperiments(unittest.TestCase):
 
     def test_ablation_experiments_runner(self):
         ablations = BenchmarkService.run_ablation_experiments()
-        self.assertEqual(len(ablations), 4)
+        self.assertEqual(len(ablations), 5)
         arch_names = [a["architecture_name"] for a in ablations]
-        self.assertIn("Baseline LLM (Zero-Shot)", arch_names)
-        self.assertIn("Multi-Agent + Rules + Adversarial Verifier (Full Pipeline)", arch_names)
+        self.assertTrue(any("A0" in name for name in arch_names))
+        self.assertTrue(any("A4" in name for name in arch_names))
 
     def test_experiment_tracker(self):
         runs = BenchmarkService.get_experiment_runs()

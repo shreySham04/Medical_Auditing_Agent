@@ -92,35 +92,41 @@ def build_clinical_agent() -> LlmAgent:
         tools=[lookup_clinical_standards],
     )
 
-from tools.training_dataset import TrainingDataset
-
-async def run_clinical_agent(record_text: str) -> dict:
+async def run_clinical_agent(
+    record_text: str,
+    require_api_key: bool = False,
+    use_fewshot_exemplars: bool = False
+) -> dict:
     """
-    Runs the Clinical Auditor ADK agent on the clinical notes.
-
-    Design & Behavior:
-    - Clinical Agent focuses only on healthcare quality.
-    - Uses 200 ground-truth training samples for few-shot in-context learning.
-    - Separation of responsibility prevents billing related signals from influencing clinical decisions.
+    Runs the Clinical Auditor agent on clinical notes.
+    - Zero-Shot by default (use_fewshot_exemplars=False).
+    - Enforces GEMINI_API_KEY when require_api_key=True.
+    - Independent clinical domain evaluation.
     """
-    # Retrieve matching few-shot training exemplars
-    exemplars = TrainingDataset.find_fewshot_exemplars(record_text)
-    matched_sample = exemplars[0] if exemplars else None
+    api_key = os.getenv("GEMINI_API_KEY")
+    if require_api_key and (not api_key or api_key == "MY_GEMINI_API_KEY"):
+        raise RuntimeError("GEMINI_API_KEY is required for model-backed evaluation.")
 
-    if not os.getenv("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY") == "MY_GEMINI_API_KEY" or LiteLlm is None:
-        # Offline/Simulation Fallback informed by 200 training samples
-        score = matched_sample["complianceScore"] if matched_sample else 78
+    if not api_key or api_key == "MY_GEMINI_API_KEY" or LiteLlm is None:
+        # Explicit Offline Demo Fallback (heuristic clinical assessment, independent of test labels)
+        from core.deterministic_rules import DeterministicRuleValidator
+        from core.evidence_extractor import StructuredEvidenceExtractor
+        ev = StructuredEvidenceExtractor.extract_evidence(record_text)
+        rules = DeterministicRuleValidator.validate_rules(record_text, ev)
+        violated = [r for r in rules if r.status == "VIOLATED" and "CLINICAL" in r.rule_id]
+        
+        score = max(40, 100 - (len(violated) * 20))
         grade = "A" if score >= 90 else ("B" if score >= 80 else ("C" if score >= 60 else "D"))
-        gaps = [matched_sample["primaryViolation"]] if matched_sample and matched_sample["clinicalDeviation"] else ["Discharge signed late", "Omitted post-discharge vital checks"]
+        gaps = [r.rule_name for r in violated] or ["Documentation review complete; no overt clinical negligence noted"]
         
         return {
-            "agent_name": "Clinical Auditor",
+            "agent_name": "Clinical Auditor (Offline Heuristic Demo)",
             "clinical_score": score,
             "clinical_grade": grade,
-            "adherence_standard": f"Standard Guidelines ({matched_sample['topic'] if matched_sample else 'AHA/ACC Chest Pain 2021'})",
+            "adherence_standard": "Hospitalist Standard Clinical Guidelines 2026",
             "clinical_gaps": gaps,
-            "positive_indicators": ["ECG performed within 8 mins of arrival", "Vital signs recorded at admission"],
-            "critique_markdown": f"### Clinical Auditor Report\n- Matched Training Sample Benchmark: #{matched_sample['id'] if matched_sample else 'TS-001'}\n- Primary Audit Finding: {matched_sample['title'] if matched_sample else 'Standard Care Review'}"
+            "positive_indicators": ["Vital signs recorded", "Clinical notes reviewed"],
+            "critique_markdown": "### Clinical Auditor Report (Demo Mode)\nHeuristic standard-of-care audit applied."
         }
         
     agent = build_clinical_agent()
@@ -131,9 +137,15 @@ async def run_clinical_agent(record_text: str) -> dict:
         app_name="medical_auditor", user_id="admin", session_id="clinical_session"
     )
     
+    prompt_content = f"Audit this clinical record for standard of care adherence:\n\n{record_text}"
+    if use_fewshot_exemplars:
+        exemplars = TrainingDataset.find_fewshot_exemplars(record_text)
+        if exemplars:
+            prompt_content = f"Reference Example:\n{exemplars[0].get('record_text', '')}\n\n" + prompt_content
+
     message = genai_types.Content(
         role="user",
-        parts=[genai_types.Part(text=f"Audit this clinical record:\n\n{record_text}")]
+        parts=[genai_types.Part(text=prompt_content)]
     )
     
     result_text = ""
