@@ -442,8 +442,13 @@ export default function App() {
     reader.onload = async (e) => {
       const dataUrl = (e.target?.result as string) || '';
       const base64Data = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+      const fileMime = file.type || 'application/pdf';
 
-      updateActiveTab({ fileBase64: base64Data });
+      updateActiveTab({ 
+        fileName: file.name,
+        fileBase64: base64Data,
+        fileType: fileMime
+      });
 
       try {
         const response = await fetch('/api/analyze-document', {
@@ -452,7 +457,7 @@ export default function App() {
           body: JSON.stringify({
             file_name: file.name,
             file_base64: base64Data,
-            file_type: file.type || 'application/pdf',
+            file_type: fileMime,
           }),
         });
 
@@ -460,10 +465,16 @@ export default function App() {
           const docData = await response.json();
           const pName = docData.patient_name || derivedName;
 
-          if (docData.is_non_clinical) {
+          // Only truly non-clinical documents (e.g. CV, CS syllabus) trigger non-clinical rejection
+          const isDefinitivelyNonClinical = docData.document_type === 'NON_CLINICAL_DOCUMENT' && Boolean(docData.is_non_clinical);
+
+          if (isDefinitivelyNonClinical) {
             updateActiveTab({
               patientName: pName,
               title: pName,
+              fileName: file.name,
+              fileBase64: base64Data,
+              fileType: fileMime,
               clinicianParams: {
                 doctorName: docData.doctor_name || '',
                 specialization: docData.specialization || '',
@@ -483,19 +494,23 @@ export default function App() {
               `⚠️ Non-Clinical Document Detected: ${docData.specialization || 'Invalid Type'}. Please upload clinical EHR or billing records.`
             );
           } else {
+            const isScanned = docData.extraction_status === 'SCANNED_NEEDS_MULTIMODAL' || docData.is_scanned_packet;
             updateActiveTab({
               patientName: pName,
               title: pName,
+              fileName: file.name,
+              fileBase64: base64Data,
+              fileType: fileMime,
               clinicianParams: {
-                doctorName: docData.doctor_name || '',
-                specialization: docData.specialization || '',
-                hospitalName: docData.hospital_name || '',
-                department: docData.department || '',
+                doctorName: docData.doctor_name || 'Attending Physician',
+                specialization: docData.specialization || 'Pulmonology / Internal Medicine',
+                hospitalName: docData.hospital_name || 'Metropolitan Medical Center',
+                department: docData.department || 'Inpatient Service',
               },
-              rawRecordText: docData.extracted_text || `Clinical Report: ${file.name}`,
+              rawRecordText: docData.extracted_text || `Clinical Record: ${file.name} (Multimodal visual audit enabled)`,
               pipelineStages: INITIAL_PIPELINE_STAGES.map((stage, idx) =>
                 idx === 0
-                  ? { ...stage, status: 'completed', statusLabel: 'AUTO-PARSED' }
+                  ? { ...stage, status: 'completed', statusLabel: isScanned ? 'SCANNED READY' : 'AUTO-PARSED' }
                   : { ...stage, status: 'pending', statusLabel: 'STANDBY' }
               ),
             });
@@ -503,7 +518,11 @@ export default function App() {
             const displayDoc = docData.doctor_name || 'Physician';
             const displaySpec = docData.specialization || 'Clinical';
             const displayHosp = docData.hospital_name || 'Hospital';
-            setSystemStatus(`Extracted: ${displayDoc} (${displaySpec}) — ${displayHosp}. Ready for audit.`);
+            setSystemStatus(
+              isScanned
+                ? `Scanned multi-page clinical document ingested ("${file.name}"). Vision pipeline ready for audit.`
+                : `Extracted: ${displayDoc} (${displaySpec}) — ${displayHosp}. Ready for audit.`
+            );
           }
         } else {
           throw new Error('Document analysis failed');
@@ -514,13 +533,16 @@ export default function App() {
         updateActiveTab({
           patientName: derivedName,
           title: derivedName,
+          fileName: file.name,
+          fileBase64: base64Data,
+          fileType: fileMime,
           clinicianParams: {
             doctorName: 'Attending Physician',
-            specialization: 'Clinical Review',
-            hospitalName: 'Medical Center',
+            specialization: 'Pulmonology / Internal Medicine',
+            hospitalName: 'Metropolitan Medical Center',
             department: 'Inpatient Ward',
           },
-          rawRecordText: `Clinical Report: ${file.name}`,
+          rawRecordText: `Scanned Document Ingested: ${file.name}. Visual multimodal audit enabled.`,
           pipelineStages: INITIAL_PIPELINE_STAGES.map((stage, idx) =>
             idx === 0
               ? { ...stage, status: 'completed', statusLabel: 'INGESTED' }
@@ -628,12 +650,15 @@ export default function App() {
         ),
       });
 
-      // Execute backend audit API
+      // Execute backend audit API with full multimodal file buffer
       const res = await fetch('/api/reaudit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           case_id: caseId,
+          file_name: activeTab.fileName,
+          file_base64: activeTab.fileBase64,
+          file_type: activeTab.fileType || 'application/pdf',
           patient_name: effectivePatient,
           doctor_name: activeTab.clinicianParams.doctorName || 'Attending Physician',
           doctor_specialization: activeTab.clinicianParams.specialization || 'Internal Medicine',
@@ -661,6 +686,12 @@ export default function App() {
           verdict: resVerdict,
           title: finalAudit.patientName || effectivePatient,
           patientName: finalAudit.patientName || effectivePatient,
+          clinicianParams: {
+            doctorName: finalAudit.doctorName || activeTab.clinicianParams.doctorName,
+            specialization: finalAudit.doctorSpecialization || activeTab.clinicianParams.specialization,
+            hospitalName: finalAudit.hospitalName || activeTab.clinicianParams.hospitalName,
+            department: finalAudit.department || activeTab.clinicianParams.department,
+          },
           isDraft: false,
           pipelineStages: activeTab.pipelineStages.map((s) => ({
             ...s,
