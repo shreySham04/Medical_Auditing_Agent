@@ -50,11 +50,46 @@ export interface AuditTraceManifest {
   reproducibility_token: string;
 }
 
+export interface EvidenceItem {
+  quote: string;
+  page?: number;
+  start?: number;
+  end?: number;
+}
+
+export interface ScoreBreakdown {
+  clinical: number;
+  billing: number;
+  documentation: number;
+  timeline: number;
+  weightedScore: number;
+  verifierAdjustment: number;
+  finalScore: number;
+  evidenceCoverageScore: number;
+  formula: string;
+}
+
+export interface BillingAuditItem {
+  date?: string;
+  service: string;
+  code?: string;
+  quantity?: number | string;
+  unitPrice?: number | string;
+  total?: number | string;
+  clinicalEvidenceSupporting?: string;
+  status: 'SUPPORTED' | 'UNSUPPORTED' | 'REQUIRES_REVIEW';
+}
+
 export interface FindingItem {
   id?: string;
   type?: string;
+  claim?: string;
   description?: string;
   severity?: 'Low' | 'Medium' | 'High' | 'Critical' | string;
+  evidence?: EvidenceItem[];
+  evidence_status?: 'SUPPORTED' | 'PARTIALLY_SUPPORTED' | 'UNSUPPORTED' | 'INSUFFICIENT_EVIDENCE';
+  finding_level?: 'OBSERVED' | 'SUPPORTED_INFERENCE' | 'VERIFIED_COMPLIANCE';
+  confidence?: number;
   finding?: string;
   text?: string;
   official_document?: string;
@@ -91,22 +126,37 @@ export interface AuditRecord {
   hospital?: string;
   hospitalName?: string;
   department?: string;
+  patientNameSource?: string;
+  patientNameConfidence?: number;
+  doctorNameSource?: string;
+  doctorNameConfidence?: number;
+  hospitalNameSource?: string;
+  hospitalNameConfidence?: number;
+  specializationSource?: string;
+  specializationConfidence?: number;
+  departmentSource?: string;
+  departmentConfidence?: number;
+  scoreBreakdown?: ScoreBreakdown;
+  evidenceCoverageScore?: number;
+  billingItems?: BillingAuditItem[];
+  billingAuditItems?: BillingAuditItem[];
+  extractionStatus?: 'SUCCESS' | 'SCANNED_NEEDS_MULTIMODAL' | 'EXTRACTION_FAILED' | 'INSUFFICIENT_EVIDENCE' | string;
   audit_date?: string;
   timestamp?: string;
   compliance_rating?: number;
-  complianceScore?: number;
-  primaryScore?: number;
-  rawScore?: number;
-  clinicalScore?: number;
-  billingScore?: number;
-  documentationScore?: number;
-  timelineScore?: number;
+  complianceScore?: number | null;
+  primaryScore?: number | null;
+  rawScore?: number | null;
+  clinicalScore?: number | null;
+  billingScore?: number | null;
+  documentationScore?: number | null;
+  timelineScore?: number | null;
   consensusIndex?: number;
   clinicalGrade?: string;
   billingGrade?: string;
   risk_classification?: 'Low' | 'Medium' | 'High' | 'Critical' | string;
   riskClassification?: 'Low' | 'Medium' | 'High' | 'Critical' | 'STANDARD_MONITORING' | 'HIGH_COMPLEXITY_MONITORED' | 'CRITICAL_DEFICIENCY' | string;
-  verdict: 'Compliant' | 'Flagged' | 'Failed' | 'Pass' | 'INSUFFICIENT_EVIDENCE' | string;
+  verdict: 'Compliant' | 'Flagged' | 'Failed' | 'Pass' | 'INSUFFICIENT_EVIDENCE' | 'Review Required' | 'REVIEW_REQUIRED' | string;
   findings?: (string | FindingItem)[];
   suppressed_false_positives?: FindingItem[];
   deterministic_rules?: DeterministicRuleCheck[];
@@ -241,7 +291,7 @@ export interface ReportTab {
   score: number;
   verdict: string;
   pipelineStages: PipelineStage[];
-  inspectorTab: 'report' | 'evidence' | 'deterministic' | 'verification' | 'trace' | 'translator';
+  inspectorTab: 'report' | 'evidence' | 'billing' | 'deterministic' | 'verification' | 'trace' | 'translator';
   isDraft: boolean;
   createdAt: number;
 }

@@ -240,41 +240,10 @@ export default function App() {
       const res = await fetch('/api/audits');
       if (res.ok) {
         const data = await res.json();
-        if (data.audits && Array.isArray(data.audits) && data.audits.length > 0) {
+        if (data.audits && Array.isArray(data.audits)) {
           setAudits(data.audits);
-          // If primary tab is untouched draft, populate it with the first case so it's ready to inspect
-          setReportTabs((prev) => {
-            if (prev.length === 1 && prev[0].isDraft && !prev[0].fileName && !prev[0].rawRecordText) {
-              const first = data.audits[0];
-              const score = first.complianceScore ?? first.compliance_rating ?? first.primaryScore ?? 75;
-              const verdict = first.verdict || (score >= 80 ? 'PASS' : score >= 50 ? 'FLAGGED' : 'FAILED');
-              return [
-                {
-                  ...prev[0],
-                  audit: first,
-                  title: first.patientName || first.patient_name || first.id || 'Report Tab #1',
-                  patientName: first.patientName || first.patient_name || '',
-                  fileName: first.fileName || `${first.id || 'record'}.json`,
-                  rawRecordText: first.reportMarkdown || '',
-                  score: score,
-                  verdict: verdict.toUpperCase(),
-                  clinicianParams: {
-                    doctorName: first.doctorName || first.doctor_name || first.doctor || '',
-                    specialization: first.doctorSpecialization || first.specialization || '',
-                    hospitalName: first.hospitalName || first.hospital || '',
-                    department: first.department || '',
-                  },
-                  pipelineStages: INITIAL_PIPELINE_STAGES.map((s) => ({
-                    ...s,
-                    status: 'completed',
-                    statusLabel: 'VERIFIED',
-                  })),
-                  isDraft: false,
-                },
-              ];
-            }
-            return prev;
-          });
+        } else {
+          setAudits([]);
         }
       }
     } catch (err) {
@@ -359,6 +328,16 @@ export default function App() {
     }
   };
 
+  const handlePurgeAllAudits = async () => {
+    setAudits([]);
+    setSystemStatus('Purged all audit reports from database repository.');
+    try {
+      await fetch('/api/audits', { method: 'DELETE' });
+    } catch (err) {
+      console.warn('Backend purge all note:', err);
+    }
+  };
+
   // Select an existing audit from the database archive into current tab (NO NEW TAB GENERATION)
   const handleSelectSavedAudit = (audit: AuditRecord) => {
     const auditScore = audit.complianceScore ?? audit.compliance_rating ?? audit.primaryScore ?? 75;
@@ -418,12 +397,10 @@ export default function App() {
 
   // Handle manual file upload into current tab (NO NEW TAB GENERATION)
   const handleFileUpload = async (file: File) => {
-    const derivedName = file.name.replace(/\.[^/.]+$/, '').replace(/[_\-]/g, ' ');
-
     updateActiveTab({
       fileName: file.name,
       fileType: file.type || 'application/pdf',
-      title: derivedName,
+      title: file.name,
       score: 0,
       verdict: 'AWAITING AUDIT...',
       audit: null,
@@ -463,7 +440,7 @@ export default function App() {
 
         if (response.ok) {
           const docData = await response.json();
-          const pName = docData.patient_name || derivedName;
+          const pName = docData.patient_name || '';
 
           // Only truly non-clinical documents (e.g. CV, CS syllabus) trigger non-clinical rejection
           const isDefinitivelyNonClinical = docData.document_type === 'NON_CLINICAL_DOCUMENT' && Boolean(docData.is_non_clinical);
@@ -471,7 +448,7 @@ export default function App() {
           if (isDefinitivelyNonClinical) {
             updateActiveTab({
               patientName: pName,
-              title: pName,
+              title: file.name,
               fileName: file.name,
               fileBase64: base64Data,
               fileType: fileMime,
@@ -497,15 +474,15 @@ export default function App() {
             const isScanned = docData.extraction_status === 'SCANNED_NEEDS_MULTIMODAL' || docData.is_scanned_packet;
             updateActiveTab({
               patientName: pName,
-              title: pName,
+              title: pName || file.name,
               fileName: file.name,
               fileBase64: base64Data,
               fileType: fileMime,
               clinicianParams: {
-                doctorName: docData.doctor_name || 'Attending Physician',
-                specialization: docData.specialization || 'Pulmonology / Internal Medicine',
-                hospitalName: docData.hospital_name || 'Metropolitan Medical Center',
-                department: docData.department || 'Inpatient Service',
+                doctorName: docData.doctor_name || '',
+                specialization: docData.specialization || '',
+                hospitalName: docData.hospital_name || '',
+                department: docData.department || '',
               },
               rawRecordText: docData.extracted_text || `Clinical Record: ${file.name} (Multimodal visual audit enabled)`,
               pipelineStages: INITIAL_PIPELINE_STAGES.map((stage, idx) =>
@@ -531,16 +508,16 @@ export default function App() {
         console.warn('Document analysis fallback notice:', err);
         const shortName = file.name.length > 30 ? `${file.name.slice(0, 27)}...` : file.name;
         updateActiveTab({
-          patientName: derivedName,
-          title: derivedName,
+          patientName: '',
+          title: file.name,
           fileName: file.name,
           fileBase64: base64Data,
           fileType: fileMime,
           clinicianParams: {
-            doctorName: 'Attending Physician',
-            specialization: 'Pulmonology / Internal Medicine',
-            hospitalName: 'Metropolitan Medical Center',
-            department: 'Inpatient Ward',
+            doctorName: '',
+            specialization: '',
+            hospitalName: '',
+            department: '',
           },
           rawRecordText: `Scanned Document Ingested: ${file.name}. Visual multimodal audit enabled.`,
           pipelineStages: INITIAL_PIPELINE_STAGES.map((stage, idx) =>
@@ -569,12 +546,12 @@ export default function App() {
     setIsRunningAudit(true);
     setSystemStatus('Running Multi-Agent Forensic Pipeline with Gemini AI...');
 
-    // 1. Mark Artifact as Verified, and reset analytical agents to STANDBY
+    // Set Document Artifact to Verified and analytical stages to Running with live backend
     updateActiveTab({
       pipelineStages: activeTab.pipelineStages.map((s, idx) =>
         idx === 0
           ? { ...s, status: 'completed', statusLabel: 'VERIFIED' }
-          : { ...s, status: 'pending', statusLabel: 'STANDBY' }
+          : { ...s, status: 'running', statusLabel: 'PROCESSING' }
       ),
     });
 
@@ -583,74 +560,11 @@ export default function App() {
       activeTab.audit?.case_id ||
       `AUD-${activeTab.id.replace(/^tab-/, '').slice(-4)}`;
 
-    const effectivePatient =
-      activeTab.patientName ||
-      activeTab.fileName.replace(/\.[^/.]+$/, '').replace(/[_\-]/g, ' ') ||
-      'Clinical Case';
-    const recordContent = activeTab.rawRecordText || `Clinical case evaluation for ${effectivePatient}.`;
+    const effectivePatient = activeTab.patientName || '';
+    const recordContent = activeTab.rawRecordText || '';
 
     try {
-      // Step 1: Document Agent (Visual & Layout extraction)
-      await new Promise((r) => setTimeout(r, 450));
-      updateActiveTab({
-        pipelineStages: activeTab.pipelineStages.map((s, idx) =>
-          idx === 1
-            ? { ...s, status: 'running', statusLabel: 'PROCESSING' }
-            : idx < 1
-            ? { ...s, status: 'completed', statusLabel: 'VERIFIED' }
-            : s
-        ),
-      });
-
-      // Step 2: Clinical Agent (Protocol grounding)
-      await new Promise((r) => setTimeout(r, 600));
-      updateActiveTab({
-        pipelineStages: activeTab.pipelineStages.map((s, idx) =>
-          idx === 2
-            ? { ...s, status: 'running', statusLabel: 'CROSS-CHECKING' }
-            : idx <= 1
-            ? { ...s, status: 'completed', statusLabel: 'VERIFIED' }
-            : s
-        ),
-      });
-
-      // Step 3: Integrity Agent (Coding validation)
-      await new Promise((r) => setTimeout(r, 600));
-      updateActiveTab({
-        pipelineStages: activeTab.pipelineStages.map((s, idx) =>
-          idx === 3
-            ? { ...s, status: 'running', statusLabel: 'CODING INTEGRITY' }
-            : idx <= 2
-            ? { ...s, status: 'completed', statusLabel: 'VERIFIED' }
-            : s
-        ),
-      });
-
-      // Step 4: Documentation Agent (Signatures, Consent & Chronology)
-      await new Promise((r) => setTimeout(r, 550));
-      updateActiveTab({
-        pipelineStages: activeTab.pipelineStages.map((s, idx) =>
-          idx === 4
-            ? { ...s, status: 'running', statusLabel: 'TIMELINE & SIGS' }
-            : idx <= 3
-            ? { ...s, status: 'completed', statusLabel: 'VERIFIED' }
-            : s
-        ),
-      });
-
-      // Step 5: Referee Agent (Synthesis & Calibration)
-      await new Promise((r) => setTimeout(r, 500));
-      updateActiveTab({
-        pipelineStages: activeTab.pipelineStages.map((s, idx) =>
-          idx === 5
-            ? { ...s, status: 'running', statusLabel: 'SYNTHESIZING' }
-            : idx <= 4
-            ? { ...s, status: 'completed', statusLabel: 'VERIFIED' }
-            : s
-        ),
-      });
-
-      // Execute backend audit API with full multimodal file buffer
+      // Execute backend audit API with full multimodal file buffer and evidence verification
       const res = await fetch('/api/reaudit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -659,11 +573,11 @@ export default function App() {
           file_name: activeTab.fileName,
           file_base64: activeTab.fileBase64,
           file_type: activeTab.fileType || 'application/pdf',
-          patient_name: effectivePatient,
-          doctor_name: activeTab.clinicianParams.doctorName || 'Attending Physician',
-          doctor_specialization: activeTab.clinicianParams.specialization || 'Internal Medicine',
-          hospital_name: activeTab.clinicianParams.hospitalName || 'Metropolitan Medical Center',
-          department: activeTab.clinicianParams.department || 'Inpatient Service',
+          patient_name: effectivePatient || undefined,
+          doctor_name: activeTab.clinicianParams.doctorName || undefined,
+          doctor_specialization: activeTab.clinicianParams.specialization || undefined,
+          hospital_name: activeTab.clinicianParams.hospitalName || undefined,
+          department: activeTab.clinicianParams.department || undefined,
           record_text: recordContent,
         }),
       });
@@ -679,25 +593,38 @@ export default function App() {
         const resScore = finalAudit.complianceScore ?? finalAudit.compliance_rating ?? 75;
         const resVerdict = (finalAudit.verdict || 'PASS').toUpperCase();
 
+        const bPipeline = data.pipeline || {};
+        const updatedStages: PipelineStage[] = activeTab.pipelineStages.map((s) => {
+          if (s.id === 'pdf') {
+            return { ...s, status: 'completed' as const, statusLabel: 'VERIFIED' };
+          }
+          const stageKey = s.id;
+          const statusVal = bPipeline[stageKey] || bPipeline[stageKey.toLowerCase()];
+          const isDone = statusVal === 'completed' || statusVal === 'VERIFIED';
+          return {
+            ...s,
+            status: 'completed',
+            statusLabel: isDone ? 'VERIFIED' : 'EVALUATED',
+          };
+        });
+
+        const resolvedPatient = finalAudit.patientName || activeTab.patientName || '';
+
         // Update active tab in place (NO NEW TAB GENERATED)
         updateActiveTab({
           audit: finalAudit,
           score: resScore,
           verdict: resVerdict,
-          title: finalAudit.patientName || effectivePatient,
-          patientName: finalAudit.patientName || effectivePatient,
+          title: resolvedPatient || activeTab.fileName || 'Clinical Case',
+          patientName: resolvedPatient,
           clinicianParams: {
-            doctorName: finalAudit.doctorName || activeTab.clinicianParams.doctorName,
-            specialization: finalAudit.doctorSpecialization || activeTab.clinicianParams.specialization,
-            hospitalName: finalAudit.hospitalName || activeTab.clinicianParams.hospitalName,
-            department: finalAudit.department || activeTab.clinicianParams.department,
+            doctorName: finalAudit.doctorName || activeTab.clinicianParams.doctorName || '',
+            specialization: finalAudit.doctorSpecialization || activeTab.clinicianParams.specialization || '',
+            hospitalName: finalAudit.hospitalName || activeTab.clinicianParams.hospitalName || '',
+            department: finalAudit.department || activeTab.clinicianParams.department || '',
           },
           isDraft: false,
-          pipelineStages: activeTab.pipelineStages.map((s) => ({
-            ...s,
-            status: 'completed',
-            statusLabel: 'COMPLETED',
-          })),
+          pipelineStages: updatedStages,
         });
 
         // Update database archive in state
@@ -848,6 +775,7 @@ export default function App() {
             onRefresh={fetchAudits}
             onOpenDirectoryModal={() => setIsSampleModalOpen(true)}
             onDeleteAudit={handleDeleteAudit}
+            onPurgeAllAudits={handlePurgeAllAudits}
           />
 
           {/* CENTER COLUMN: Main Forensic Workspace */}

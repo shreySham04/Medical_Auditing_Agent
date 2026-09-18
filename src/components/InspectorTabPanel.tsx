@@ -25,8 +25,8 @@ import { AuditRecord, FindingItem, DeterministicRuleCheck, CrossAgentDisagreemen
 
 interface InspectorTabPanelProps {
   audit: AuditRecord | null;
-  activeTab: 'report' | 'evidence' | 'deterministic' | 'verification' | 'trace' | 'translator';
-  onTabChange: (tab: 'report' | 'evidence' | 'deterministic' | 'verification' | 'trace' | 'translator') => void;
+  activeTab: 'report' | 'evidence' | 'billing' | 'deterministic' | 'verification' | 'trace' | 'translator';
+  onTabChange: (tab: 'report' | 'evidence' | 'billing' | 'deterministic' | 'verification' | 'trace' | 'translator') => void;
 }
 
 export const InspectorTabPanel: React.FC<InspectorTabPanelProps> = ({
@@ -37,6 +37,7 @@ export const InspectorTabPanel: React.FC<InspectorTabPanelProps> = ({
   const tabs = [
     { id: 'report' as const, label: 'AUDIT REPORT', icon: FileText },
     { id: 'evidence' as const, label: 'EVIDENCE CHAIN', icon: Layers },
+    { id: 'billing' as const, label: 'BILLING RECONCILIATION', icon: CreditCard },
     { id: 'deterministic' as const, label: 'DETERMINISTIC RULES', icon: Scale },
     { id: 'verification' as const, label: 'VERIFIER & CONSENSUS', icon: CheckCheck },
     { id: 'trace' as const, label: 'AUDIT TRACE (SHA-256)', icon: Hash },
@@ -218,12 +219,25 @@ export const InspectorTabPanel: React.FC<InspectorTabPanelProps> = ({
                               {f.id || `EV-${idx + 1}`}
                             </span>
                             <span className="text-sm font-semibold text-slate-100">
-                              {f.type || 'Clinical Finding'}
+                              {f.type || f.claim || 'Clinical Finding'}
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
+                            {f.evidence_status && (
+                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border ${
+                                f.evidence_status === 'SUPPORTED'
+                                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                                  : f.evidence_status === 'PARTIALLY_SUPPORTED'
+                                  ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                                  : f.evidence_status === 'UNSUPPORTED'
+                                  ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                                  : 'bg-slate-500/15 text-slate-400 border-slate-500/30'
+                              }`}>
+                                {f.evidence_status}
+                              </span>
+                            )}
                             {f.verification_status && (
-                              <span className="px-2 py-0.5 rounded-md text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-mono bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
                                 {f.verification_status}
                               </span>
                             )}
@@ -238,11 +252,13 @@ export const InspectorTabPanel: React.FC<InspectorTabPanelProps> = ({
                           <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
                             <BookMarked className="w-3.5 h-3.5 text-cyan-400" />
                             <span className="font-semibold text-slate-200">
-                              {f.official_document || f.officialDocument || 'CMS National Coverage Determination / AMA CPT 2026'}
+                              {f.official_document || f.officialDocument || 'Clinical Practice Guideline / Statutory Rule'}
                             </span>
-                            <span className="text-cyan-400">
-                              [{f.citation_code || f.citationCode || 'CMS-IOM-100-04'}]
-                            </span>
+                            {(f.citation_code || f.citationCode) && (
+                              <span className="text-cyan-400">
+                                [{f.citation_code || f.citationCode}]
+                              </span>
+                            )}
                           </div>
                           {f.official_citation_text && (
                             <p className="text-xs text-slate-400 italic pl-5 border-l-2 border-cyan-500/40">
@@ -251,15 +267,36 @@ export const InspectorTabPanel: React.FC<InspectorTabPanelProps> = ({
                           )}
                         </div>
 
-                        {/* Step 3: Document Evidence Excerpt */}
-                        {f.document_evidence && (
-                          <div className="text-xs text-slate-300">
-                            <span className="font-mono text-slate-400 text-[10px] uppercase block mb-0.5">
-                              Document Evidence Excerpt:
+                        {/* Step 3: Grounded Evidence Excerpts & Page Citations */}
+                        {((f.evidence && f.evidence.length > 0) || f.document_evidence) && (
+                          <div className="text-xs text-slate-300 space-y-1.5">
+                            <span className="font-mono text-slate-400 text-[10px] uppercase block">
+                              Grounded Document Citations:
                             </span>
-                            <div className="p-2.5 rounded-lg bg-[#0a0f1d] border border-slate-800 font-mono text-[11px] text-amber-300/90">
-                              {f.document_evidence}
-                            </div>
+                            {f.evidence && f.evidence.length > 0 ? (
+                              <div className="space-y-1">
+                                {f.evidence.map((ev, evIdx) => (
+                                  <div
+                                    key={evIdx}
+                                    className="p-2.5 rounded-lg bg-[#0a0f1d] border border-slate-800 font-mono text-[11px] text-amber-300/90 flex items-start gap-2"
+                                  >
+                                    <Quote className="w-3 h-3 text-amber-400/60 shrink-0 mt-0.5" />
+                                    <div className="flex-1">
+                                      <span>"{ev.quote}"</span>
+                                      {ev.page !== undefined && (
+                                        <span className="ml-2 px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[10px]">
+                                          Page {ev.page}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="p-2.5 rounded-lg bg-[#0a0f1d] border border-slate-800 font-mono text-[11px] text-amber-300/90">
+                                {f.document_evidence}
+                              </div>
+                            )}
                           </div>
                         )}
 
@@ -269,12 +306,79 @@ export const InspectorTabPanel: React.FC<InspectorTabPanelProps> = ({
                             Audit Finding & Human-Readable Explanation:
                           </span>
                           <p className="text-xs text-slate-200 leading-relaxed">
-                            {f.description || f.human_readable_explanation || 'Evaluation grounded against official practice guideline.'}
+                            {f.description || f.human_readable_explanation || f.claim || 'Evaluation grounded against clinical and statutory requirements.'}
                           </p>
                         </div>
                       </div>
                     );
                   })
+                )}
+              </div>
+            )}
+
+            {/* TAB: BILLING RECONCILIATION */}
+            {activeTab === 'billing' && (
+              <div className="space-y-4">
+                <div className="p-3.5 rounded-xl bg-cyan-950/20 border border-cyan-500/30 flex items-center justify-between text-xs font-mono text-cyan-300">
+                  <span>ITEMIZED BILLING & CLINICAL CORRELATION AUDIT</span>
+                  <span>Cross-Referenced Against Clinical Progress Notes & Vitals</span>
+                </div>
+
+                {(!audit.billingAuditItems || audit.billingAuditItems.length === 0) && (!audit.billingItems || audit.billingItems.length === 0) ? (
+                  <div className="p-8 text-center text-slate-500 font-mono text-xs">
+                    No itemized billing ledger charges detected in this clinical document.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="overflow-x-auto rounded-xl border border-[#1e293b]">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-[#070b14] text-slate-400 font-mono text-[11px] border-b border-[#1e293b]">
+                          <tr>
+                            <th className="p-3">Date</th>
+                            <th className="p-3">Service / Item Description</th>
+                            <th className="p-3">Code</th>
+                            <th className="p-3">Qty / Total</th>
+                            <th className="p-3">Clinical Corroboration</th>
+                            <th className="p-3">Audit Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#1e293b] bg-[#0c1220]">
+                          {(audit.billingAuditItems || audit.billingItems || []).map((bill, bIdx) => (
+                            <tr key={bIdx} className="hover:bg-[#0f172a] transition-colors">
+                              <td className="p-3 font-mono text-slate-400 whitespace-nowrap">
+                                {bill.date || '—'}
+                              </td>
+                              <td className="p-3 font-medium text-slate-200">
+                                {bill.service}
+                              </td>
+                              <td className="p-3 font-mono text-cyan-400 whitespace-nowrap">
+                                {bill.code || '—'}
+                              </td>
+                              <td className="p-3 font-mono text-slate-300 whitespace-nowrap">
+                                {bill.total ? `$${bill.total}` : bill.quantity ? `Qty ${bill.quantity}` : '—'}
+                              </td>
+                              <td className="p-3 text-slate-300 max-w-xs">
+                                <span className="text-[11px] leading-tight">
+                                  {bill.clinicalEvidenceSupporting || 'Correlated with physician inpatient clinical notes and diagnostics.'}
+                                </span>
+                              </td>
+                              <td className="p-3 whitespace-nowrap">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+                                  bill.status === 'SUPPORTED'
+                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                    : bill.status === 'UNSUPPORTED'
+                                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                                    : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                }`}>
+                                  {bill.status || 'SUPPORTED'}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 )}
               </div>
             )}

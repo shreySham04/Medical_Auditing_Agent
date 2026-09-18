@@ -42,9 +42,9 @@ export const ForensicInvestigator: React.FC<ForensicInvestigatorProps> = ({
   const getReport = (a?: AuditRecord) => a?.report_markdown || a?.reportMarkdown || '';
   const getFindingsList = (a?: AuditRecord): any[] => Array.isArray(a?.findings) ? a.findings : [];
 
-  const initialId = getCaseId(audits[0]);
+  const initialId = audits.length > 0 ? getCaseId(audits[0]) : '';
   const [selectedCaseId, setSelectedCaseId] = useState<string>(initialId);
-  const selectedAudit = audits.find(a => getCaseId(a) === selectedCaseId) || audits[0];
+  const selectedAudit = audits.find(a => getCaseId(a) === selectedCaseId) || (audits.length > 0 ? audits[0] : null);
 
   const handleReauditClick = async () => {
     if (!selectedAudit) return;
@@ -111,58 +111,68 @@ export const ForensicInvestigator: React.FC<ForensicInvestigatorProps> = ({
       </div>
 
       {/* Case Selector Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {audits.map((audit) => {
-          const caseId = getCaseId(audit);
-          const isSelected = caseId === selectedCaseId;
-          const score = getScore(audit);
-          return (
-            <div
-              key={caseId}
-              onClick={() => setSelectedCaseId(caseId)}
-              className={`p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden ${
-                isSelected
-                  ? 'bg-slate-900 border-blue-500/80 ring-1 ring-blue-500/50 shadow-xl'
-                  : 'bg-slate-900/40 border-slate-800 hover:border-slate-700 hover:bg-slate-900/70'
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
-                    {caseId}
+      {audits.length === 0 ? (
+        <div className="p-8 text-center rounded-2xl border border-dashed border-slate-800 bg-slate-900/30">
+          <FileText className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+          <h3 className="text-sm font-semibold text-slate-300">No Saved Audit Cases</h3>
+          <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
+            Ingest and audit a medical record in the Workspace to populate repository cases.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {audits.map((audit) => {
+            const caseId = getCaseId(audit);
+            const isSelected = caseId === selectedCaseId;
+            const score = getScore(audit);
+            return (
+              <div
+                key={caseId}
+                onClick={() => setSelectedCaseId(caseId)}
+                className={`p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden ${
+                  isSelected
+                    ? 'bg-slate-900 border-blue-500/80 ring-1 ring-blue-500/50 shadow-xl'
+                    : 'bg-slate-900/40 border-slate-800 hover:border-slate-700 hover:bg-slate-900/70'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
+                      {caseId}
+                    </span>
+                    <h3 className="text-base font-bold text-white mt-2 flex items-center gap-1.5">
+                      <User className="w-4 h-4 text-blue-400" />
+                      {getPatientName(audit)}
+                    </h3>
+                  </div>
+                  {getVerdictBadge(getVerdict(audit))}
+                </div>
+
+                <div className="mt-3 space-y-1 text-xs text-slate-400">
+                  <div className="flex items-center gap-1.5">
+                    <Building2 className="w-3.5 h-3.5 text-slate-500" />
+                    <span>{getDoctorName(audit)} — {getHospital(audit)}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Audit Date: {getAuditDate(audit)}</span>
+                  </div>
+                </div>
+
+                {/* Score Bar */}
+                <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
+                  <span className="text-slate-400">Compliance Rating:</span>
+                  <span className={`font-mono font-bold ${
+                    score >= 80 ? 'text-emerald-400' : score >= 50 ? 'text-amber-400' : 'text-rose-400'
+                  }`}>
+                    {score}/100
                   </span>
-                  <h3 className="text-base font-bold text-white mt-2 flex items-center gap-1.5">
-                    <User className="w-4 h-4 text-blue-400" />
-                    {getPatientName(audit)}
-                  </h3>
-                </div>
-                {getVerdictBadge(getVerdict(audit))}
-              </div>
-
-              <div className="mt-3 space-y-1 text-xs text-slate-400">
-                <div className="flex items-center gap-1.5">
-                  <Building2 className="w-3.5 h-3.5 text-slate-500" />
-                  <span>{getDoctorName(audit)} — {getHospital(audit)}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Audit Date: {getAuditDate(audit)}</span>
                 </div>
               </div>
-
-              {/* Score Bar */}
-              <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
-                <span className="text-slate-400">Compliance Rating:</span>
-                <span className={`font-mono font-bold ${
-                  score >= 80 ? 'text-emerald-400' : score >= 50 ? 'text-amber-400' : 'text-rose-400'
-                }`}>
-                  {score}/100
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Multi-Agent Collaborative Workflow Visualizer */}
       <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4">

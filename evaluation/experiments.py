@@ -259,7 +259,7 @@ class ExperimentBenchmarkRunner:
 
         inj_rate = round((inj_defended / inj_total) * 100, 1) if inj_total > 0 else 0.0
         abs_rate = round((abstain_success / abstain_total) * 100, 1) if abstain_total > 0 else 0.0
-        exc_fpr = round((exception_fps / exception_total) * 100, 1) if exception_total > 0 else 45.0
+        exc_fpr = round((exception_fps / exception_total) * 100, 1) if exception_total > 0 else 0.0
 
         in_tok = 1200
         out_tok = 350
@@ -536,8 +536,8 @@ class ExperimentBenchmarkRunner:
 
         inj_rate = round((inj_defended / inj_total) * 100, 1) if inj_total > 0 else 100.0
         abs_rate = round((abstain_success / abstain_total) * 100, 1) if abstain_total > 0 else 100.0
-        exc_fpr = round((exception_fps / exception_total) * 100, 1) if exception_total > 0 else 18.2
-        unsupported_rate = round((unsupported_count / total_findings) * 100, 1) if total_findings > 0 else 13.5
+        exc_fpr = round((exception_fps / exception_total) * 100, 1) if exception_total > 0 else 0.0
+        unsupported_rate = round((unsupported_count / total_findings) * 100, 1) if total_findings > 0 else 0.0
 
         in_tok = 4800
         out_tok = 1500

@@ -27,6 +27,7 @@ interface AuditRepositorySidebarProps {
   onRefresh: () => void;
   onOpenDirectoryModal: () => void;
   onDeleteAudit?: (auditId: string) => void;
+  onPurgeAllAudits?: () => void;
 }
 
 export const AuditRepositorySidebar: React.FC<AuditRepositorySidebarProps> = ({
@@ -40,8 +41,10 @@ export const AuditRepositorySidebar: React.FC<AuditRepositorySidebarProps> = ({
   onRefresh,
   onOpenDirectoryModal,
   onDeleteAudit,
+  onPurgeAllAudits,
 }) => {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmPurgeAll, setConfirmPurgeAll] = useState<boolean>(false);
 
   const handleDeleteClick = (e: React.MouseEvent, auditId: string) => {
     e.stopPropagation();
@@ -207,20 +210,65 @@ export const AuditRepositorySidebar: React.FC<AuditRepositorySidebarProps> = ({
               <Archive className="w-3 h-3 text-slate-500" />
               Database Cases ({audits.length})
             </span>
-            <button
-              type="button"
-              onClick={onRefresh}
-              className="p-0.5 text-slate-500 hover:text-cyan-400 transition-colors cursor-pointer"
-              title="Refresh database records"
-            >
-              <RefreshCw className="w-2.5 h-2.5" />
-            </button>
+            <div className="flex items-center gap-1.5">
+              {audits.length > 0 && onPurgeAllAudits && (
+                confirmPurgeAll ? (
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onPurgeAllAudits();
+                        setConfirmPurgeAll(false);
+                      }}
+                      className="px-1.5 py-0.5 text-[9px] font-mono font-bold text-rose-300 bg-rose-500/20 border border-rose-500/40 rounded hover:bg-rose-500/30"
+                      title="Confirm purge all"
+                    >
+                      CONFIRM PURGE
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setConfirmPurgeAll(false);
+                      }}
+                      className="px-1 py-0.5 text-[9px] font-mono text-slate-400 hover:text-slate-200"
+                    >
+                      CANCEL
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setConfirmPurgeAll(true);
+                    }}
+                    className="px-1.5 py-0.5 text-[9px] font-mono text-slate-400 hover:text-rose-400 transition-colors"
+                    title="Clear all saved audit reports"
+                  >
+                    CLEAR ALL
+                  </button>
+                )
+              )}
+              <button
+                type="button"
+                onClick={onRefresh}
+                className="p-0.5 text-slate-500 hover:text-cyan-400 transition-colors cursor-pointer"
+                title="Refresh database records"
+              >
+                <RefreshCw className="w-2.5 h-2.5" />
+              </button>
+            </div>
           </div>
 
           {audits.length === 0 ? (
             <div className="py-6 px-3 rounded-xl border border-dashed border-[#1a2333] text-center">
-              <div className="text-[11px] text-slate-500 font-mono">
+              <div className="text-[11px] text-slate-400 font-mono">
                 No database records saved yet.
+              </div>
+              <div className="text-[10px] text-slate-600 font-mono mt-1">
+                Ingest or upload a clinical record to generate your first audit report.
               </div>
             </div>
           ) : (
