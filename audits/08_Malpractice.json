@@ -1,0 +1,43 @@
+{
+  "id": "08_Malpractice",
+  "case_id": "08_Malpractice",
+  "patientName": "Alex Morgan",
+  "doctorName": "Attending Physician (Inpatient Care)",
+  "doctorSpecialization": "Pulmonology & Respiratory Medicine",
+  "hospitalName": "Metropolitan Medical Center",
+  "department": "Inpatient Pulmonary Division",
+  "complianceScore": 28,
+  "primaryScore": 28,
+  "clinicalScore": 20,
+  "billingScore": 88,
+  "documentationScore": 25,
+  "timelineScore": 25,
+  "verdict": "Failed",
+  "riskClassification": "CRITICAL_DEFICIENCY",
+  "findings": [
+    {
+      "id": "MALP-01",
+      "type": "Malpractice Deviation",
+      "description": "Substantial standard of care deviation identified in clinical management timeline.",
+      "severity": "Critical"
+    },
+    {
+      "id": "CLIN-02",
+      "type": "Clinical Safety Risk",
+      "description": "Failure to perform required procedural checks or timely intervention prior to deterioration.",
+      "severity": "High"
+    }
+  ],
+  "explainedTerms": [
+    {
+      "term": "Chest Radiography (CXR)",
+      "definition": "Frontal and lateral thoracic X-rays required by ATS/IDSA guidelines to diagnose community-acquired pneumonia and exclude mimics."
+    },
+    {
+      "term": "Empiric Antibiosis",
+      "definition": "Initial antimicrobial treatment initiated before definitive microbiological pathogen identification."
+    }
+  ],
+  "reportMarkdown": "# 🛡️ Medical Auditor Forensic Report\n**Patient Name:** Alex Morgan\n**Attending MD:** Attending Physician (Inpatient Care) (Pulmonology & Respiratory Medicine)\n**Facility:** Metropolitan Medical Center — Inpatient Pulmonary Division\n**Calibrated Compliance Rating:** 28/100 (**Failed**)\n\n---\n### 🩺 Clinical Standard of Care Review\n- **Diagnostic Incomplete**: Community-acquired pneumonia diagnosed and treated without mandatory baseline chest imaging.\n\n### 💳 Financial & CPT Coding Audit\n- Evaluated Inpatient Care Documentation and Medical Decision Making complexity.\n\n### ⚖️ Auditor Summary & Recommendations\n- **Verdict**: **FAILED** (28% score — CRITICAL DEFICIENCY).\n",
+  "timestamp": "2026-09-17T22:45:51.600Z"
+}

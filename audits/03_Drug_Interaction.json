@@ -1,0 +1,43 @@
+{
+  "id": "03_Drug_Interaction",
+  "case_id": "03_Drug_Interaction",
+  "patientName": "Test Patient",
+  "doctorName": "Attending Physician (Inpatient Care)",
+  "doctorSpecialization": "Pulmonology & Respiratory Medicine",
+  "hospitalName": "Metropolitan Medical Center",
+  "department": "Inpatient Pulmonary Division",
+  "complianceScore": 55,
+  "primaryScore": 55,
+  "clinicalScore": 85,
+  "billingScore": 88,
+  "documentationScore": 60,
+  "timelineScore": 90,
+  "verdict": "Flagged",
+  "riskClassification": "HIGH_COMPLEXITY_MONITORED",
+  "findings": [
+    {
+      "id": "INTERACT-01",
+      "type": "Pharmacotherapy Safety",
+      "description": "Critical Drug-Drug Interaction: Warfarin co-prescribed with TMP-SMX (Trimethoprim-Sulfamethoxazole), causing significant CYP2C9 inhibition and bleeding risk.",
+      "severity": "High"
+    },
+    {
+      "id": "DOC-01",
+      "type": "Documentation Quality",
+      "description": "Omission of mandatory anticoagulant surveillance schedule or INR follow-up interval in discharge instructions.",
+      "severity": "Medium"
+    }
+  ],
+  "explainedTerms": [
+    {
+      "term": "CYP2C9 Inhibition",
+      "definition": "Metabolic blockage of cytochrome P450 2C9 by TMP-SMX, leading to elevated free warfarin levels and hemorrhage danger."
+    },
+    {
+      "term": "INR (International Normalized Ratio)",
+      "definition": "Laboratory measurement of blood clotting time used to guide safe oral anticoagulation."
+    }
+  ],
+  "reportMarkdown": "# 🛡️ Medical Auditor Forensic Report\n**Patient Name:** Test Patient\n**Attending MD:** Attending Physician (Inpatient Care) (Pulmonology & Respiratory Medicine)\n**Facility:** Metropolitan Medical Center — Inpatient Pulmonary Division\n**Calibrated Compliance Rating:** 55/100 (**Flagged**)\n\n---\n### 🩺 Clinical Standard of Care Review\n- **Pharmacotherapy Warning**: Severe drug interaction identified between Warfarin and TMP-SMX with high hemorrhage risk.\n- **Monitoring Deviation**: Missing mandatory INR surveillance.\n\n### 💳 Financial & CPT Coding Audit\n- Evaluated Inpatient Care Documentation and Medical Decision Making complexity.\n\n### ⚖️ Auditor Summary & Recommendations\n- **Verdict**: **FLAGGED** (55% score — HIGH COMPLEXITY MONITORED).\n",
+  "timestamp": "2026-09-17T22:45:50.592Z"
+}
